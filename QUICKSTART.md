@@ -393,10 +393,14 @@ cd /opt/qbank && nano .env
 #    HOMEPAGE_HOST=qfoundry.in   ADMIN_HOST=studio.qfoundry.in
 #    LEARNER_HOST=prep.qfoundry.in   WRITER_HOST=writer.qfoundry.in
 #    CLIENT_URL=https://studio.qfoundry.in,https://prep.qfoundry.in,https://writer.qfoundry.in
+#    (all five are already these values in .env.example; do not retype them.
+#    The domain is qfoundry.in, NOT .com: a wrong host burns Let's Encrypt's
+#    five attempts an hour. ./scripts/check-hosts.sh proves .env and DNS.)
 #    MONGODB_URI=... with the database name `qbank` (a fresh database on Atlas),
 #    JWT_SECRET, OPENAI_API_KEY, OTP_PROVIDER=message_central and the two
 #    MESSAGE_CENTRAL_* values, SEED_SUPERADMIN_*; every *_TAG stays `latest`.
 #    Leave PORT=5000 alone: the api image listens there and nginx proxies to it.
+./scripts/check-hosts.sh            # .env matches .env.example, and all five names resolve here
 ACME_EMAIL=you@example.com docker compose -f compose.traefik.yml -p traefik up -d   # section 1
 docker login ghcr.io                                                                 # if declined in setup-app.sh
 

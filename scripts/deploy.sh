@@ -102,6 +102,13 @@ if [[ -n "$missing" ]]; then
 fi
 ok "All $(env_keys "$ENV_TEMPLATE" | wc -l | tr -d ' ') expected keys present"
 
+# Hostnames equal .env.example's, and this service's own name(s) resolve to
+# this server. Before the container is recreated, because a container with a
+# wrong Host() label makes Traefik burn Let's Encrypt attempts on the spot.
+# Invoked through bash so a lost exec bit on the server cannot break deploys.
+step "Checking hostnames and DNS"
+bash "$DEPLOY_DIR/scripts/check-hosts.sh" "$SERVICE"
+
 # ── 3. Record the tag (this is the rollback trail) ─────────────────────────
 case "$SERVICE" in
   api)      TAG_VAR=API_TAG ;;

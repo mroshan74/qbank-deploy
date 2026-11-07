@@ -18,7 +18,11 @@ this repo on every deploy, so the server can only run what is committed.
 
 ## Before your first deploy
 
-Fill these in — the checked-in files use placeholders.
+Fill these in. The four hostnames and `CLIENT_URL` are already the real
+production values in `.env.example` (the domain is `qfoundry.in`, **not**
+`.com`), so a `.env` copied from it is right as long as nobody retypes them;
+`scripts/check-hosts.sh` refuses to deploy if they drift. Everything else uses
+placeholders.
 
 | Placeholder | Where | What to put |
 |---|---|---|
@@ -119,7 +123,8 @@ Consequences worth knowing:
 | `compose.prod.yml` | The production stack (`api` + `web` + `learner` + `writer` + `homepage`, plus the `seed` profile) |
 | `compose.traefik.yml` | Edge proxy and TLS. Brought up once, then left alone |
 | `compose.local.yml` | Prod-parity local stack, with its own MongoDB: `api`, `web`, `learner`, `writer`, `homepage` |
-| `.env.example` | The key schema `deploy.sh` validates the server's `.env` against |
+| `.env.example` | The key schema `deploy.sh` validates the server's `.env` against, and the record of the production hostnames |
+| `scripts/check-hosts.sh` | Refuses a deploy whose hostnames differ from `.env.example`, whose `CLIENT_URL` misses an app origin, or whose names (plus `www.`) do not resolve to this server. Run by both deploy scripts before anything changes; safe to run by hand |
 | `scripts/setup-app.sh` | One-time application setup on an already-provisioned server. Checks its prerequisites; provisions nothing |
 | `scripts/deploy.sh` | What CI runs over SSH. One service, one pinned tag |
 | `scripts/deploy-latest.sh` | Stop, pull `:latest`, start every service, verify. The manual test-round loop until the pipelines are wired up |
@@ -875,10 +880,20 @@ the intended account prints the value it should be.
 **Certificate is not issued.** Traefik needs the hostname's DNS record to
 resolve to this server *before* it can complete the ACME challenge, and each
 host is issued separately — so the admin can be fine while the learner is not.
-Confirm with `dig +short` for each name (`<HOMEPAGE_HOST>` **and**
+Run `./scripts/check-hosts.sh` first: it compares the hostnames in `.env` with
+`.env.example` and resolves each name (`<HOMEPAGE_HOST>` **and**
 `www.<HOMEPAGE_HOST>`, which share one certificate and fail together, then
-`<ADMIN_HOST>`, `<LEARNER_HOST>`, `<WRITER_HOST>`), then
-`docker logs traefik`.
+`<ADMIN_HOST>`, `<LEARNER_HOST>`, `<WRITER_HOST>`) against this server's
+address. Then `docker logs traefik`.
+
+Let's Encrypt allows **five failed authorizations per name per hour**; past
+that, Traefik logs `429 ... rateLimited ... retry after <time>` and nothing
+issues until then. Fix the cause before retrying, or each restart spends
+another attempt. This happened on 2026-11-07, when the new server's `.env` said
+`qfoundry.com` instead of `qfoundry.in`; that is why both deploy scripts now
+run `check-hosts.sh` before recreating anything. Once `.env` is fixed, recreate
+the containers so their `Host()` labels change: `docker compose -f
+compose.prod.yml -p qbank up -d`.
 
 **Which build is live?** The version string is rendered in the app's sidebar
 footer. `GET /api/readyz` also returns the API's `buildId`.

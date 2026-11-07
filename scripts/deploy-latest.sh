@@ -95,6 +95,10 @@ if [[ -n "$missing" ]]; then
 fi
 ok "All $(env_keys "$ENV_TEMPLATE" | wc -l | tr -d ' ') expected keys present"
 
+# Every hostname, since every container is recreated. See deploy.sh.
+step "Checking hostnames and DNS"
+bash "$DEPLOY_DIR/scripts/check-hosts.sh"
+
 # ── 3. Point every service at the tag, and stamp BUILD_ID ──────────────────
 set_key() {
   local key="$1" value="$2"

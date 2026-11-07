@@ -163,7 +163,9 @@ What those remaining steps amount to, so nothing is a surprise:
   `ADMIN_HOST`, `LEARNER_HOST`, `WRITER_HOST`), `CLIENT_URL` naming the three
   *app* origins (studio, prep, writer; not the homepage), the database and API
   secrets, the SMS provider, and the seed account. `deploy.sh` refuses to run
-  while any key from `.env.example` is missing.
+  while any key from `.env.example` is missing, and (via
+  `scripts/check-hosts.sh`) while a hostname differs from `.env.example`'s
+  `qfoundry.in` values or does not resolve to the server.
 - **GitHub secrets** (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`,
   `VPS_SSH_KEY_PASSPHRASE`) go on **all five** app repos: `qbank-api`,
   `qbank-admin`, `qbank-learner`, `qbank-writer`, `qbank-homepage`.
