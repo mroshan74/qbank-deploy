@@ -95,7 +95,7 @@ Consequences worth knowing:
 | `INSTRUCTION.md` | How the box itself was provisioned, before this repo ever reached it |
 | `compose.prod.yml` | The production stack (`api` + `web` + `learner`, plus the `seed` profile) |
 | `compose.traefik.yml` | Edge proxy and TLS. Brought up once, then left alone |
-| `compose.local.yml` | Prod-parity local stack, with its own MongoDB |
+| `compose.local.yml` | Prod-parity local stack, with its own MongoDB: `api`, `web`, `learner`, `writer` |
 | `.env.example` | The key schema `deploy.sh` validates the server's `.env` against |
 | `scripts/setup-app.sh` | One-time application setup on an already-provisioned server. Checks its prerequisites; provisions nothing |
 | `scripts/deploy.sh` | What CI runs over SSH. One service, one pinned tag |
@@ -113,8 +113,8 @@ production. It is the fastest way to see the app, demo it, or check a change
 before pushing — and it is where the deployment setup itself gets tested.
 
 ```bash
-# clone next to qbank-api, qbank-admin and qbank-learner —
-# the compose build contexts are ../<repo>, so all four sit side by side
+# clone next to qbank-api, qbank-admin, qbank-learner and qbank-writer —
+# the compose build contexts are ../<repo>, so all five sit side by side
 git clone <this repo>
 cd qbank-deploy
 
@@ -126,9 +126,13 @@ docker compose -f compose.local.yml --profile seed run --rm seed   # first run o
 |---|---|---|
 | **Admin** | http://localhost:8080 | sign in as `superadmin` / `ChangeMe123!` (you will be asked to set a new password) |
 | **Learner** | http://localhost:8081 | sign in by mobile number; the one-time code is printed in the api logs |
+| **Writer** | http://localhost:8082 | sign in with a `writer` account created in the admin (username and password); assign it a draft exam paper there first |
 
 Override the seeded account with `SEED_SUPERADMIN_USERNAME` /
-`SEED_SUPERADMIN_PASSWORD`, and the ports with `WEB_PORT` / `LEARNER_PORT`.
+`SEED_SUPERADMIN_PASSWORD`, and the ports with `WEB_PORT` / `LEARNER_PORT` /
+`WRITER_PORT`. The `writer` service builds `../qbank-writer` (the question
+writer portal); it is local-only until that repo's roadmap reaches production
+(its Phase 8).
 
 > **This stack is the only place three things get tested before a server sees
 > them**, because `pnpm dev` exercises none of them: each SPA's single-origin
