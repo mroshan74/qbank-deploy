@@ -353,73 +353,66 @@ missing key stops **every** service's deploy, not just the new tier's.
 Roll back the tier alone with `./scripts/rollback.sh <service> <tag>`; nothing
 else restarts.
 
-## One-time: moving to the qfoundry.in hosts and adding the homepage
+## First deploy on a new server (the qfoundry.in hosts)
 
 Phase 4 of the workspace roadmap `docs/roadmaps/qfoundry-brand-and-hostnames.md`.
-Delete this section afterwards. It folds in two older one-time jobs: the
-`psc-archiver` → `qbank` server move (the section at the end of this file, run
-it as step 0 if the server is still `/opt/psc-archiver`) and the writer portal's
-first deploy. Nothing is pushed from any app repo before step 4: every workflow's
-SSH step calls `/opt/qbank/scripts/deploy.sh`, and the admin push removes the old
-marketing pages, so the homepage must be live first.
+The previous server was deleted on 2026-11-07, so this is a clean bootstrap, not
+a migration: sections 0 to 4 above are the procedure, and this section only fixes
+the order and the values that are new. Delete it once the server is live.
 
 ```bash
-# 0. If the server is still /opt/psc-archiver: run the "moving the server from
-#    psc-archiver to qbank" steps 2 (down, mv, remote, image names, database)
-#    below, but do NOT seed yet.
+# 1. Provision the box: INSTRUCTION.md steps 1 to 3 (harden, SSH keys, Docker
+#    permissions). Nothing here runs until `docker info` works for the deploy
+#    account.
 
-# 1. DNS at the registrar, low TTL, all A records on this server's IP:
+# 2. DNS at the registrar, low TTL, A records on the NEW server's IP:
 #    qfoundry.in (@), www.qfoundry.in, studio.qfoundry.in, prep.qfoundry.in,
-#    writer.qfoundry.in. Leave the old trynbuild records until step 6.
+#    writer.qfoundry.in. The apex and www. share one certificate, so both must
+#    resolve before the homepage's first deploy.
 dig +short qfoundry.in www.qfoundry.in studio.qfoundry.in prep.qfoundry.in writer.qfoundry.in
 
-# 2. GitHub: create the private repo mroshan74/qbank-homepage; set the four
-#    VPS_* secrets on qbank-homepage and on qbank-writer (same values as the
-#    other app repos).
+# 3. Push qbank-deploy first: setup-app.sh fetches it from GitHub. Nothing
+#    deploys from this push (this repo has no workflow).
 
-# 3. The server .env, BEFORE pulling this repo (a missing key stops every deploy):
-cd /opt/qbank
-sed -i 's|^ADMIN_HOST=.*|ADMIN_HOST=studio.qfoundry.in|; s|^LEARNER_HOST=.*|LEARNER_HOST=prep.qfoundry.in|' .env
-grep -q '^WRITER_HOST=' .env || cat >> .env <<'KEYS'
-WRITER_HOST=writer.qfoundry.in
-WRITER_TAG=latest
-WRITER_IMAGE=ghcr.io/mroshan74/qbank-writer
-KEYS
-sed -i 's|^WRITER_HOST=.*|WRITER_HOST=writer.qfoundry.in|' .env
-cat >> .env <<'KEYS'
-HOMEPAGE_HOST=qfoundry.in
-HOMEPAGE_TAG=latest
-HOMEPAGE_IMAGE=ghcr.io/mroshan74/qbank-homepage
-KEYS
-sed -i 's|^CLIENT_URL=.*|CLIENT_URL=https://studio.qfoundry.in,https://prep.qfoundry.in,https://writer.qfoundry.in|' .env
+# 4. On the server, as the account CI will connect as:
+curl -fsSL https://raw.githubusercontent.com/mroshan74/qbank-deploy/main/scripts/setup-app.sh | bash
+cd /opt/qbank && nano .env
+#    HOMEPAGE_HOST=qfoundry.in   ADMIN_HOST=studio.qfoundry.in
+#    LEARNER_HOST=prep.qfoundry.in   WRITER_HOST=writer.qfoundry.in
+#    CLIENT_URL=https://studio.qfoundry.in,https://prep.qfoundry.in,https://writer.qfoundry.in
+#    MONGODB_URI=... with the database name `qbank` (a fresh database on Atlas),
+#    JWT_SECRET, OPENAI_API_KEY, OTP_PROVIDER=message_central and the two
+#    MESSAGE_CENTRAL_* values, SEED_SUPERADMIN_*; every *_TAG stays `latest`.
+ACME_EMAIL=you@example.com docker compose -f compose.traefik.yml -p traefik up -d   # section 1
+docker login ghcr.io                                                                 # if declined in setup-app.sh
 
-# 4. Push qbank-deploy, then pull it here. Traefik picks up the new Host()
-#    rules on the next `up`; the old hosts answer 404 from here until step 6.
-git -C /opt/qbank pull --ff-only
+# 5. GitHub: set the four deploy secrets on ALL FIVE app repos (qbank-api,
+#    qbank-admin, qbank-learner, qbank-writer, qbank-homepage): VPS_HOST (the
+#    new IP), VPS_USER (setup-app.sh printed it), VPS_SSH_KEY,
+#    VPS_SSH_KEY_PASSPHRASE. The old values point at a server that no longer
+#    exists, so every repo needs new ones, not only the two new repos.
 
-# 5. Push the app repos IN THIS ORDER, letting each CI run finish:
-#    qbank-api, qbank-homepage, qbank-learner, qbank-writer, qbank-admin (last).
-#    Each run builds :<sha> and :latest and calls deploy.sh <svc> <sha>; the
-#    first homepage and writer deploys create their containers and Traefik
-#    requests the four certificates (watch `docker logs traefik` for ACME).
-#    If step 0 ran, reseed the empty qbank database afterwards instead:
-./scripts/deploy-latest.sh --seed      # only after a step-0 move
-#    then pin the tags with each repo's workflow (tag = <sha>) or deploy.sh.
+# 6. Push the app repos in this order, letting each CI run finish:
+#    qbank-api, qbank-homepage, qbank-learner, qbank-writer, qbank-admin.
+#    Each run builds ghcr.io/mroshan74/<repo>:<sha> and :latest and runs
+#    deploy.sh <service> <sha>; the first run of each creates its container and
+#    Traefik requests its certificate (watch `docker logs traefik` for ACME).
+#    The GHCR packages are private because the repos are; check once.
 
-# 6. Verify, then clean up:
+# 7. Seed the empty database: section 3.
+docker compose -f compose.prod.yml -p qbank --profile seed run --rm seed
+
+# 8. Verify: section 4, plus
 curl -sI https://www.qfoundry.in/ | grep -i '^location'        # the apex
 curl -s https://qfoundry.in/healthz                             # ok
-for h in studio prep writer; do curl -s https://$h.qfoundry.in/api/readyz; echo; done
-#    In a browser: studio/ lands on /login; a staff, a writer and a learner
-#    sign-in; a community-organization PDF shows "Prepared with QFoundry".
-#    Make the qbank-homepage and qbank-writer GHCR packages private.
-#    Remove the trynbuild DNS records (no redirects: it was the QA domain).
-#    Run `rollback.sh homepage <tag>` once to prove the path, then re-deploy.
-```
+#    studio/ lands on /login; a staff, a writer and a learner sign-in; a
+#    community-organization PDF says "Prepared with QFoundry".
+./scripts/rollback.sh homepage <sha>   # once, to prove the path; it is a no-op redeploy
 
-Default account: `superadmin` / `ChangeMe123!`, override with
-`SEED_SUPERADMIN_USERNAME` / `SEED_SUPERADMIN_PASSWORD`. The learner's one-time
-code is printed in `docker compose -f compose.local.yml logs api`.
+# 9. Clean up what the old server left behind elsewhere: drop the `pscarchiver`
+#    database in Atlas, delete the old psc-archiver-* GHCR packages, and remove
+#    the trynbuild DNS records (the QA domain; no redirects).
+```
 
 ---
 
@@ -437,41 +430,3 @@ code is printed in `docker compose -f compose.local.yml logs api`.
 | Certificate not issued | DNS does not resolve yet. `dig +short` the host (for the homepage **both** the apex and `www.`, they share one certificate), then `docker logs traefik` |
 
 Longer list, with the reasoning: [README.md → Troubleshooting](README.md#troubleshooting).
-
-## One-time: moving the server from `psc-archiver` to `qbank`
-
-Done once, when the rename roadmap's Phase 3 runs (`docs/roadmaps/rename-to-qbank.md`
-in the workspace root). Delete this section afterwards. Order matters: the app
-images land on GHCR first, then the server moves, then the stack starts from
-those images.
-
-```bash
-# 1. Push qbank-deploy, then qbank-api, qbank-admin and qbank-learner. Their
-#    CI builds ghcr.io/mroshan74/qbank-*:<sha> and :latest; the deploy step
-#    fails because /opt/qbank does not exist yet. Expected.
-
-# 2. On the server, with no AI-tagging job in flight:
-cd /opt/psc-archiver
-docker compose -f compose.prod.yml -p psc-archiver down
-cd /opt && sudo mv psc-archiver qbank && cd qbank
-git remote set-url origin https://github.com/mroshan74/qbank-deploy.git
-git pull --ff-only
-# .env: API_IMAGE, WEB_IMAGE, LEARNER_IMAGE -> the qbank-* names
-sed -i 's|psc-archiver-api|qbank-api|; s|psc-archiver-web|qbank-admin|; s|psc-archiver-client|qbank-learner|' .env
-# .env: MONGODB_URI, change the database name (the path segment) to qbank by hand.
-# The seed below recreates the System organization and the superadmin from
-# SEED_SUPERADMIN_* on that empty database.
-nano .env
-
-# 3. Start everything from :latest and seed:
-./scripts/deploy-latest.sh --seed
-
-# 4. Pin the tags: run each app's "Build, Push & Deploy" workflow by hand with
-#    the <sha> from step 1 as the tag, or on the server:
-./scripts/deploy.sh api <sha>; ./scripts/deploy.sh web <sha>; ./scripts/deploy.sh learner <sha>
-
-# 5. Clean up, once both hosts answer:
-docker volume rm psc-archiver-ai-tagging-jobs
-# drop the pscarchiver database in Atlas; after a week, delete the old
-# psc-archiver-* packages on GHCR.
-```
