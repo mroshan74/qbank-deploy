@@ -51,9 +51,9 @@ esac
 # interleave their pull/up steps against the same compose project — and since
 # `sed -i` below rewrites .env via a temp file and a rename, an interleave
 # silently drops one of the two tag edits and reports success for a tag that
-# was never applied. GitHub's `concurrency:` group cannot prevent this: api,
-# admin and client are three separate repos with three separate groups, so
-# their workflows can reach this server at the same moment.
+# was never applied. GitHub's `concurrency:` group cannot prevent this: the
+# five app repos are five separate groups, so their workflows can reach this
+# server at the same moment.
 #
 # flock is part of util-linux and always present on the server; it is missing
 # on Windows/macOS, where this script is only ever smoke-tested.
@@ -148,10 +148,23 @@ case "$SERVICE" in
   *)              PROBE_SERVICE=web;        PROBE_PATH="/api/readyz" ;;
 esac
 
+# On a server where nothing has run yet there is no `web` container to probe
+# through: the api is the first thing CI deploys, and the admin image arrives
+# later. Prove the api at its own port instead, so that first run passes rather
+# than timing out against a container that does not exist. The proxy path is
+# proved by the first web deploy that follows. Only `api` takes this branch; a
+# web deploy that cannot exec into web is a real failure.
+if [[ "$SERVICE" == "api" ]] && \
+   [[ -z "$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps -q --status running web 2>/dev/null)" ]]; then
+  warn "No running web container to probe through — probing the api container directly."
+  PROBE_SERVICE=api; PROBE_PATH=":5000/api/readyz"
+fi
+
 step "Waiting for the app to respond (via ${PROBE_SERVICE} ${PROBE_PATH})"
 probe() {
   # Checked from inside a web container, which exercises the real path a
-  # browser takes: nginx -> (proxy) -> api.
+  # browser takes: nginx -> (proxy) -> api. (Or, on the first deploy ever, from
+  # inside the api container itself — PROBE_PATH then carries the :5000 port.)
   #
   # 127.0.0.1, NOT localhost: Docker's /etc/hosts maps localhost to both
   # 127.0.0.1 and ::1, BusyBox wget tries ::1 first, and nginx's `listen 80`

@@ -286,6 +286,30 @@ build is live. That is acceptable for MVP test runs and must be reverted to pinn
 short-SHA tags when the pipelines land, which is what `compose.prod.yml`'s "never
 `:latest`" comment is about.
 
+## Added 2026-11-07 — the first deploy on an empty server passes through CI ✅
+
+Found while preparing Phase 4 of the workspace roadmap (a clean first deploy on
+the new VPS, the old one having been deleted): `deploy.sh api` proved the api
+*through the `web` container*, which on an empty server does not exist yet, so
+the api's first CI run always failed at "Waiting for the app to respond" after
+60s while the api itself was up. The README's answer was "bring everything up by
+hand once", which cannot work when the images do not exist until CI builds them.
+
+- [x] **`scripts/deploy.sh`**: when the service is `api` and
+      `docker compose ps -q --status running web` is empty, probe the api
+      container itself at `127.0.0.1:5000/api/readyz` and say so
+      (`No running web container to probe through`). Only `api` takes the branch;
+      every other tier is still proved through its own nginx, and a `web` deploy
+      that cannot exec into `web` is still a failure.
+- [x] **Docs**: the README's first-deploy exception became the push order (api,
+      then the frontends); QUICKSTART's first-deploy section and troubleshooting
+      table, and `setup-app.sh`'s printed step 6, say the same. The same pass
+      brought every "three services / both tiers / two packages" leftover in
+      README, QUICKSTART and the printed steps up to five services and four
+      hosts, added the writer's two-font set (`MANDARAM.ttf`,
+      `NotoSansMalayalam.ttf`) to the font probes, and generalised
+      `INSTRUCTION.md` to VPS placeholders with a DNS step and a firewall check.
+
 ## Risks and non-goals
 
 - **Main risk: the seed container's network.** In `compose.local.yml` everything

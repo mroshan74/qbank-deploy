@@ -201,7 +201,7 @@ fi
 if [[ "$GHCR_DONE" == "yes" ]]; then
   GHCR_STEP="  5. GHCR login — already done for '$RUN_AS'. Nothing to do here."
 else
-  GHCR_STEP="  5. Both GHCR images are private — log in once, as '$RUN_AS', or every deploy
+  GHCR_STEP="  5. All five GHCR images are private — log in once, as '$RUN_AS', or every deploy
      fails with \"unauthorized\":
        echo \"<PAT>\" | docker login ghcr.io -u <github-username> --password-stdin
      PAT from github.com/settings/tokens — classic, scope read:packages."
@@ -249,17 +249,19 @@ Remaining steps:
 
 $GHCR_STEP
 
-  6. FIRST deploy only: deploy.sh's health check execs into a web container
-     and curls /api/readyz through its nginx proxy — so it needs the api
-     container already running, which isn't true yet. Bring them all up
-     together once instead (after setting real API_TAG/WEB_TAG/LEARNER_TAG/
-     WRITER_TAG in .env):
-       docker compose -f compose.prod.yml -p qbank up -d
-     Every deploy after this one — from CI or by hand — can safely use:
+  6. Deploy. Normally CI does it: a push to each app repo builds its image and
+     runs deploy.sh here over SSH. Push them in this order so every readiness
+     probe has what it needs: qbank-api (proved at the api container itself
+     while no web container exists yet), qbank-homepage, qbank-learner,
+     qbank-writer, qbank-admin. By hand, one service at a time:
        ./scripts/deploy.sh api <tag>
        ./scripts/deploy.sh web <tag>       # staff back office
        ./scripts/deploy.sh learner <tag>   # learner-facing app
        ./scripts/deploy.sh writer <tag>    # question writer portal
+       ./scripts/deploy.sh homepage <tag>  # marketing site
+     Or start all five at once (after API_TAG/WEB_TAG/LEARNER_TAG/WRITER_TAG/
+     HOMEPAGE_TAG in .env name published tags):
+       docker compose -f compose.prod.yml -p qbank up -d
 
   7. Seed the database — one command, on an empty database. It creates the
      System organization and the superadmin, waits for the api, then seeds the

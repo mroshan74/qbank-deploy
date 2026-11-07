@@ -40,16 +40,16 @@ Expect: `Container traefik  Started`.
 
 ## 2. The app stack
 
-All three services together. Not `deploy.sh` — its readiness probe reaches the
-api *through* a web container, so on a stack where nothing is running yet a
-single-service deploy always times out.
+All five services together. Not `deploy.sh` — that deploys one service at a
+time, and the frontends' readiness probes reach the api *through* their own
+nginx, so starting a torn-down stack one tier at a time is slower for no gain.
 
 ```bash
 docker compose -f compose.prod.yml -p qbank up -d
 ```
 
-Expect: `qbank-api`, `qbank-admin` and `qbank-learner` started.
-Give the api ~30s, then:
+Expect: `qbank-api`, `qbank-admin`, `qbank-learner`, `qbank-writer` and
+`qbank-homepage` started. Give the api ~30s, then:
 
 ```bash
 docker compose -f compose.prod.yml -p qbank ps
@@ -152,6 +152,19 @@ Expect: `200 OK` with `Content-Type: font/otf` for the first, `404` for the seco
 A 200 on the second means the `/fonts/` block is missing and every Malayalam
 export will fail several layers away from the cause.
 
+The writer ships its own, smaller set: `MANDARAM.ttf` and `NotoSansMalayalam.ttf`
+only, no Century Schoolbook and no bold cut, so `Mandaram-Bold.ttf` is *meant*
+to 404 there.
+
+```bash
+for face in MANDARAM.ttf NotoSansMalayalam.ttf; do
+  docker compose -f compose.prod.yml -p qbank exec -T writer \
+    wget -S -q -O /dev/null "http://127.0.0.1/fonts/$face"
+done
+```
+
+Expect: `200 OK` with `Content-Type: font/ttf` for both.
+
 Then in a browser:
 
 - `https://<HOMEPAGE_HOST>` — the marketing site renders; `curl -sI https://www.<HOMEPAGE_HOST>/` answers `301` with a `Location:` on the apex; the Sign in to Studio link opens `https://<ADMIN_HOST>`.
@@ -208,7 +221,7 @@ cd /opt/qbank
 ./scripts/deploy-latest.sh
 ```
 
-Stop, pull, start, and prove both nginx tiers answer. Add `--seed` to run the
+Stop, pull, start, and prove all four nginx tiers answer. Add `--seed` to run the
 step 3 bootstrap in the same pass, which is what you want after clearing the
 database:
 
@@ -218,10 +231,10 @@ database:
 
 | Flag | Does |
 |---|---|
-| *(none)* | `down`, `pull`, `up -d`, then probe `web` and `learner` |
+| *(none)* | `down`, `pull`, `up -d`, then probe every nginx tier: `/api/readyz` through `web`, `learner` and `writer`, `/healthz` on `homepage` |
 | `--seed` | also runs the seed profile once the api is answering |
 | `--no-down` | skip the stop; compose recreates only services whose image changed, so an unchanged frontend is not bounced |
-| `--tag <tag>` | use a pinned tag instead of `latest`, for all three services at once |
+| `--tag <tag>` | use a pinned tag instead of `latest`, for all five services at once |
 | `--help` | the summary above |
 
 It refuses to touch anything if `.env` is missing a key that `.env.example` has,
@@ -237,7 +250,7 @@ cd /opt/qbank
 
 # 1. point every service at the newest published image, and stamp a fresh
 #    BUILD_ID so old sessions are retired the way a real deploy retires them
-sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_TAG=.*/LEARNER_TAG=latest/;s/^WRITER_TAG=.*/WRITER_TAG=latest/' .env
+sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_TAG=.*/LEARNER_TAG=latest/;s/^WRITER_TAG=.*/WRITER_TAG=latest/;s/^HOMEPAGE_TAG=.*/HOMEPAGE_TAG=latest/' .env
 sed -i "s/^BUILD_ID=.*/BUILD_ID=$(date +%y%m%d%H%M)-latest/" .env
 
 # 2. stop all app services
@@ -383,6 +396,7 @@ cd /opt/qbank && nano .env
 #    MONGODB_URI=... with the database name `qbank` (a fresh database on Atlas),
 #    JWT_SECRET, OPENAI_API_KEY, OTP_PROVIDER=message_central and the two
 #    MESSAGE_CENTRAL_* values, SEED_SUPERADMIN_*; every *_TAG stays `latest`.
+#    Leave PORT=5000 alone: the api image listens there and nginx proxies to it.
 ACME_EMAIL=you@example.com docker compose -f compose.traefik.yml -p traefik up -d   # section 1
 docker login ghcr.io                                                                 # if declined in setup-app.sh
 
@@ -394,9 +408,14 @@ docker login ghcr.io                                                            
 
 # 6. Push the app repos in this order, letting each CI run finish:
 #    qbank-api, qbank-homepage, qbank-learner, qbank-writer, qbank-admin.
+#    Mind the branch each workflow watches: `master` for qbank-api and
+#    qbank-admin, `main` for the other three.
 #    Each run builds ghcr.io/mroshan74/<repo>:<sha> and :latest and runs
 #    deploy.sh <service> <sha>; the first run of each creates its container and
 #    Traefik requests its certificate (watch `docker logs traefik` for ACME).
+#    The api's run is proved at the api container itself (there is no web
+#    container yet; deploy.sh says so and carries on); every later run is
+#    proved through its own tier's nginx, the way a browser reaches it.
 #    The GHCR packages are private because the repos are; check once.
 
 # 7. Seed the empty database: section 3.
@@ -421,6 +440,7 @@ curl -s https://qfoundry.in/healthz                             # ok
 | Symptom | Cause |
 |---|---|
 | `network traefik_proxy declared as external, but could not be found` | Step 1 was skipped |
+| `deploy.sh api` says `No running web container to probe through` | Informational. Nothing has deployed the admin yet, so the api is proved at its own port; the line disappears after the first `web` deploy |
 | Seed stops at `API did not become ready` | The api container is not up, or is unhealthy. `docker compose -f compose.prod.yml -p qbank logs api` |
 | Seed stops at `Login failed (401)` | `SEED_SUPERADMIN_USERNAME` / `SEED_SUPERADMIN_PASSWORD` in `.env` do not match the account already in the database |
 | `Refusing to import: N questions ... are not in the seed files` | The database is not empty and predates `_id` matching. Clear it and re-run step 3 |

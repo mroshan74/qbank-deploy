@@ -8,7 +8,32 @@ provisions a server (see the README's *Prerequisites* table for what must
 already be true); this file is just the running record of how that provisioning
 was done, so it can be repeated on the next box.
 
-Order matters: **1 → 2 → 3**, then [Set up the application](#4-set-up-the-application).
+Order matters: **0 → 1 → 2 → 3**, then [Set up the application](#4-set-up-the-application).
+
+---
+
+## 0. Start DNS early
+
+DNS is the one step that does not wait for you: Let's Encrypt cannot issue a
+certificate until the name resolves to the new server, and propagation takes
+anywhere from minutes to a day. Create the records as soon as the VPS has an IP,
+low TTL, all A records on that IP:
+
+| Record | Serves |
+|---|---|
+| `qfoundry.in` (`@`) | the marketing site (`HOMEPAGE_HOST`) |
+| `www.qfoundry.in` | same router; redirects to the apex. **Shares the apex's certificate**, so both must resolve |
+| `studio.qfoundry.in` | the staff back office (`ADMIN_HOST`) |
+| `prep.qfoundry.in` | the learner app (`LEARNER_HOST`) |
+| `writer.qfoundry.in` | the writer portal (`WRITER_HOST`) |
+
+Check from anywhere before the first deploy:
+
+```bash
+dig +short qfoundry.in www.qfoundry.in studio.qfoundry.in prep.qfoundry.in writer.qfoundry.in
+```
+
+Expect the new server's IP five times.
 
 ---
 
@@ -26,14 +51,30 @@ Installs Docker Engine with the Compose plugin — the two things
 > ⚠ This is a third-party script piped into a shell. Read it first
 > (`curl -fsSL <url> | less`) before running it on a box you care about.
 
+**Verify the firewall before moving on.** Whatever the hardening left behind,
+three ports must be open: 22 (SSH, and GitHub Actions deploys over it), 80 and
+443 (Traefik; plain HTTP only redirects to HTTPS). These are the README's
+*Prerequisites* rows that no script in this repo will ever touch.
+
+```bash
+sudo ufw status verbose        # or whatever firewall the script configured
+```
+
+Expect `22/tcp`, `80/tcp` and `443/tcp` allowed. If `ufw` is active and a port
+is missing: `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`. Also make sure
+the provider's own firewall (cloud console security group) allows the same
+three, or the box is open and still unreachable.
+
 ---
 
 ## 2. SSH keys
 
-Generate a dedicated key — one per purpose, never a reused personal key.
+Generate a dedicated key — one per purpose, never a reused personal key. This
+one is for *you* to administer the box; the CI deploy key comes later and is a
+different key.
 
 ```bash
-ssh-keygen -o -a 100 -t ed25519 -f ~/.ssh/homeserver -C mroshan.dev@gmail.com
+ssh-keygen -o -a 100 -t ed25519 -f ~/.ssh/qfoundry-vps -C "you@example.com qfoundry-vps"
 ```
 
 | Flag | Meaning |
@@ -41,24 +82,36 @@ ssh-keygen -o -a 100 -t ed25519 -f ~/.ssh/homeserver -C mroshan.dev@gmail.com
 | `-o` | Write in the newer OpenSSH private-key format (implied for `ed25519`, harmless to state) |
 | `-a` | KDF rounds for the passphrase — higher is slower to brute-force |
 | `-t` | Key type: `dsa \| ecdsa \| ecdsa-sk \| ed25519 \| ed25519-sk \| rsa` |
-| `-f` | Output keyfile — writes `~/.ssh/homeserver` and `~/.ssh/homeserver.pub` |
+| `-f` | Output keyfile — writes `~/.ssh/qfoundry-vps` and `~/.ssh/qfoundry-vps.pub` |
 | `-C` | Comment, so the key is identifiable in `authorized_keys` |
 
-Install the **public** half on the server:
+Install the **public** half on the server, as the account that will own
+`/opt/qbank` and that CI will later connect as (a dedicated service account is
+preferred; `root` works):
 
 ```bash
-ssh-copy-id -i ~/.ssh/homeserver node1@192.168.1.40   # -i = identity file
+ssh-copy-id -i ~/.ssh/qfoundry-vps <account>@<vps-ip>   # -i = identity file
 ```
 
 Then log in with it:
 
 ```bash
-ssh -i ~/.ssh/homeserver node1@192.168.1.40
+ssh -i ~/.ssh/qfoundry-vps <account>@<vps-ip>
+```
+
+Optional, so the rest of these notes can say `ssh qfoundry`:
+
+```
+# ~/.ssh/config
+Host qfoundry
+  HostName <vps-ip>
+  User <account>
+  IdentityFile ~/.ssh/qfoundry-vps
 ```
 
 The CI deploy key is a **separate** key from this one — generated locally and
-handed over as a public half only. See *Set up the application* in
-[README.md](README.md#set-up-the-application).
+handed over as a public half only, installed on the *same* account. See *Set up
+the application* in [README.md](README.md#set-up-the-application).
 
 ---
 
@@ -94,7 +147,7 @@ docker info
 ## 4. Set up the application
 
 Once the above holds, the server is ready for the one-time application setup.
-Run it **as the account CI will connect as**:
+Run it **as the account CI will connect as** (the one from step 2):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mroshan74/qbank-deploy/main/scripts/setup-app.sh | bash
@@ -104,6 +157,19 @@ It checks its prerequisites, clones this repo to `/opt/qbank`, creates
 `.env` from the template, and prints the remaining manual steps (also saved to
 `/opt/qbank/REMAINING-STEPS.txt`). Safe to re-run.
 
+What those remaining steps amount to, so nothing is a surprise:
+
+- **`.env`** needs the **four** hostnames from step 0 (`HOMEPAGE_HOST`,
+  `ADMIN_HOST`, `LEARNER_HOST`, `WRITER_HOST`), `CLIENT_URL` naming the three
+  *app* origins (studio, prep, writer; not the homepage), the database and API
+  secrets, the SMS provider, and the seed account. `deploy.sh` refuses to run
+  while any key from `.env.example` is missing.
+- **GitHub secrets** (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`,
+  `VPS_SSH_KEY_PASSPHRASE`) go on **all five** app repos: `qbank-api`,
+  `qbank-admin`, `qbank-learner`, `qbank-writer`, `qbank-homepage`.
+- **Traefik** comes up before the app stack; it owns the shared network.
+- **GHCR login** once, on this account; the five packages are private.
+
 Full details: [README.md → Set up the application](README.md#set-up-the-application).
 
 ---
@@ -111,6 +177,9 @@ Full details: [README.md → Set up the application](README.md#set-up-the-applic
 ## 5. Bring the app up
 
 Everything above happens **once per box**. Bringing the application up — Traefik,
-the app stack, then the one-command seed — happens on every fresh MVP round, and
-lives in its own file: **[QUICKSTART.md](QUICKSTART.md)**, commands only, in paste
-order.
+the five-service app stack, then the one-command seed — happens on every fresh
+MVP round, and lives in its own file: **[QUICKSTART.md](QUICKSTART.md)**,
+commands only, in paste order. For a brand-new server its section
+[First deploy on a new server](QUICKSTART.md#first-deploy-on-a-new-server-the-qfoundryin-hosts)
+fixes the order: push `qbank-deploy`, run `setup-app.sh`, Traefik, secrets, then
+the five app repos in order (`qbank-api` first), seed, verify.

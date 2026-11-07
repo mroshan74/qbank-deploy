@@ -18,10 +18,11 @@
 # Then open  http://localhost:8080 (admin),  http://localhost:8081 (learner),
 # http://localhost:8082 (writer)  and  http://localhost:8083 (homepage)
 #
-# The learner container is the only place the client's /api proxy and its PDF
-# fonts get exercised before a server sees them — `pnpm dev` is cross-origin to
-# :5000 and loads fonts off the Vite dev server, so neither path is covered
-# there. Check both here after touching either app's nginx.conf.
+# The web, learner and writer containers are the only place each SPA's /api
+# proxy and its PDF fonts under /fonts/ get exercised before a server sees them
+# — `pnpm dev` is cross-origin to :5000 (or proxies through Vite) and loads
+# fonts off the dev server, so neither path is covered there. Check both here
+# after touching any app's nginx.conf.
 #
 # This stack deliberately uses its OWN MongoDB container. The predecessor
 # project's local compose pointed at the live Atlas cluster with full

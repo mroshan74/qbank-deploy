@@ -1,6 +1,6 @@
 # qbank-deploy
 
-Deployment configuration for **PSC Archiver** — the NestJS API (`qbank-api`)
+Deployment configuration for **QFoundry** — the NestJS API (`qbank-api`)
 and its four React frontends: the staff back office (`qbank-admin`), the
 learner-facing app (`qbank-learner`), the question writer portal
 (`qbank-writer`) and the static marketing site at the apex (`qbank-homepage`).
@@ -125,7 +125,7 @@ Consequences worth knowing:
 | `scripts/deploy-latest.sh` | Stop, pull `:latest`, start every service, verify. The manual test-round loop until the pipelines are wired up |
 | `scripts/rollback.sh` | Redeploy an older tag |
 | `scripts/bootstrap.mjs` | First-run bootstrap, for **both** stacks (the `seed` compose profile in each). Seeds the System organization, the superadmin, the taxonomy, then the bundled papers and questions. Runs *inside* the `api` container — the host never needs Node.js, only Docker |
-| `docs/roadmaps/` | Planned work, one phase at a time. Current: [server-bootstrap-runbook.md](docs/roadmaps/server-bootstrap-runbook.md) |
+| `docs/roadmaps/` | Planned work, one phase at a time. [server-bootstrap-runbook.md](docs/roadmaps/server-bootstrap-runbook.md) is complete; the current server work is Phase 4 of the workspace roadmap [qfoundry-brand-and-hostnames.md](../docs/roadmaps/qfoundry-brand-and-hostnames.md), the first deploy on the new server |
 
 ---
 
@@ -272,7 +272,9 @@ To run an exact published build instead of your working tree:
 export API_IMAGE=ghcr.io/mroshan74/qbank-api
 export WEB_IMAGE=ghcr.io/mroshan74/qbank-admin
 export LEARNER_IMAGE=ghcr.io/mroshan74/qbank-learner
-export API_TAG=a1b2c3d WEB_TAG=a1b2c3d LEARNER_TAG=a1b2c3d
+export WRITER_IMAGE=ghcr.io/mroshan74/qbank-writer
+export HOMEPAGE_IMAGE=ghcr.io/mroshan74/qbank-homepage
+export API_TAG=a1b2c3d WEB_TAG=a1b2c3d LEARNER_TAG=a1b2c3d WRITER_TAG=a1b2c3d HOMEPAGE_TAG=a1b2c3d
 docker compose -f compose.local.yml pull
 docker compose -f compose.local.yml up -d --no-build
 ```
@@ -383,7 +385,7 @@ echo "<PAT>" | docker login ghcr.io -u <your-github-username> --password-stdin
 One-time only: Docker persists this to that account's `~/.docker/config.json`,
 so every later `docker compose pull` — CI-triggered or by hand —
 authenticates automatically from here on. Skip this entirely by
-making the two GHCR packages public instead (repo → Packages → package →
+making the five GHCR packages public instead (repo → Packages → package →
 Package settings → visibility) if you'd rather not manage this credential.
 
 **Bring Traefik up before the app stack.** The `compose.traefik.yml` stack
@@ -421,39 +423,43 @@ cd /opt/qbank
 ./scripts/deploy.sh homepage a1b2c3d  # marketing site
 ```
 
-**Exception: the very first deploy on a brand-new server.** Step 5 below
-polls `/api/readyz` *through a web container's nginx proxy* — which needs the
-`api` container already running. On a server where nothing has ever been
-started, deploying one service alone with `deploy.sh` will always time out
-waiting for the api, regardless of which you pick first. (A web container
-itself now *starts* fine without the api — it just returns 502 until the api
-appears — but the deploy probe still needs it.) Bring them all up together,
-once, instead (after `API_TAG` / `WEB_TAG` / `LEARNER_TAG` in `.env` point at
-real published tags):
+**The very first deploy on a brand-new server works through CI too, in the
+right order.** Step 5 below normally polls `/api/readyz` *through the nginx of
+the tier just deployed*, and an `api` deploy is proved through `web`. On a
+server where nothing has ever run there is no `web` container yet, so
+`deploy.sh api` notices, says `No running web container to probe through`, and
+proves the api at its own port (`127.0.0.1:5000/api/readyz` inside the api
+container) instead. Every frontend deployed after that is proved through its
+own nginx against an api that is already serving. So the push order on a fresh
+box is **api first**, then the frontends (the homepage needs no api at all);
+the paste-ready version is [QUICKSTART.md → First deploy on a new
+server](QUICKSTART.md#first-deploy-on-a-new-server-the-qfoundryin-hosts).
+
+To start everything at once by hand instead, after every `*_TAG` in `.env`
+(`API_TAG`, `WEB_TAG`, `LEARNER_TAG`, `WRITER_TAG`, `HOMEPAGE_TAG`) names a
+published tag:
 
 ```bash
 docker compose -f compose.prod.yml -p qbank up -d
 ```
 
-Every deploy after that — from CI or by hand — can go through `deploy.sh`
-normally, since from then on the api container is always already up.
-
-This is *not* a problem when adding a new frontend to a stack that is already
-running: `deploy.sh` creates the container in step 4 and probes it in step 5,
-and the api it proxies to is already serving. The first `deploy.sh learner`
-against a live stack works with no special handling.
+Adding a new frontend to a stack that is already running needs no special
+handling either: `deploy.sh` creates the container in step 4 and probes it in
+step 5, and the api it proxies to is already serving.
 
 `deploy.sh` will:
 
 1. `git pull` this repo, so the config is the committed one
 2. check the server's `.env` has every key present in `.env.example`, and
    **abort before touching anything** if not
-3. write the tag into `.env` (`API_TAG` / `WEB_TAG` / `LEARNER_TAG`, and
-   `BUILD_ID` for the api)
+3. write the tag into `.env` (`API_TAG` / `WEB_TAG` / `LEARNER_TAG` /
+   `WRITER_TAG` / `HOMEPAGE_TAG`, and `BUILD_ID` for the api)
 4. pull the image, then recreate only that one service
-5. poll `/api/readyz` **from inside the web container of the tier just
-   deployed** — the real browser path. A `learner` deploy is verified through
-   the learner's own nginx; `api` and `web` deploys go through `web`
+5. poll `/api/readyz` **from inside the nginx container of the tier just
+   deployed** — the real browser path. `learner` and `writer` deploys are
+   verified through their own nginx; `api` and `web` deploys go through `web`
+   (or, when no `web` container exists yet, the api is probed at its own port);
+   the `homepage` has no `/api` and is probed at its own `/healthz`
 6. prune images older than 7 days, keeping a week of rollback targets
 
 Step 5 normally costs 3–10 seconds: the loop probes once *before* its first
@@ -517,7 +523,7 @@ Doing it without the script, which is all the script does:
 cd /opt/qbank
 
 # once: point every service at the newest published image
-sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_TAG=.*/LEARNER_TAG=latest/' .env
+sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_TAG=.*/LEARNER_TAG=latest/;s/^WRITER_TAG=.*/WRITER_TAG=latest/;s/^HOMEPAGE_TAG=.*/HOMEPAGE_TAG=latest/' .env
 
 # each refresh: stamp a fresh BUILD_ID, stop, pull, start
 sed -i "s/^BUILD_ID=.*/BUILD_ID=$(date +%y%m%d%H%M)-latest/" .env
@@ -699,10 +705,11 @@ untouched.
 
 **Deploy failed at "Waiting for the app to respond".** The new image is running
 but not serving. The last 40 log lines are printed above the failure. Roll back
-with the command the script prints, then investigate. **If this is the very
-first deploy on this server**, this is expected rather than a real failure —
-see the callout under *Deploy* above: bring all the containers up together once
-with plain `docker compose up -d` before using `deploy.sh` for the first time.
+with the command the script prints, then investigate. On a brand-new server
+check the order: the api has to be deployed before any app tier, because the
+frontends are proved through their `/api` proxy. (`deploy.sh api` itself copes
+with an empty server: it probes the api container directly when there is no
+`web` yet, and says so.)
 
 **Deploy failed at "Another deploy has held the lock for over 5 minutes."**
 Another `deploy.sh` is still running, or one was killed in a way that left its
@@ -725,10 +732,11 @@ remediation.
 env var — the app deliberately refuses to boot without `MONGODB_URI` and
 `JWT_SECRET`. Check `docker compose -f compose.prod.yml -p qbank logs api`.
 
-**502 on `/api` while the api container is healthy.** Applies to both `web` and
-`learner`. Their nginx resolves the api by name through Docker's embedded DNS
-(`resolver 127.0.0.11` in `qbank-admin/nginx.conf` and
-`qbank-learner/nginx.conf`) and re-resolves it every 10s, so a recreated
+**502 on `/api` while the api container is healthy.** Applies to `web`,
+`learner` and `writer` alike (the homepage has no `/api`; it answers 404
+there by design). Their nginx resolves the api by name through Docker's embedded
+DNS (`resolver 127.0.0.11` in `qbank-admin/nginx.conf`,
+`qbank-learner/nginx.conf` and `qbank-writer/nginx.conf`) and re-resolves it every 10s, so a recreated
 api container with a new IP is picked up on its own. A 502 in the ~10s right
 after a deploy is that DNS cache expiring and is expected — the deploy probe
 retries through it. A *persistent* 502 means the running web image predates that
@@ -747,10 +755,10 @@ docker compose -f compose.prod.yml -p qbank exec -T learner \
   wget -q -O- http://127.0.0.1/api/readyz
 ```
 
-**Malayalam PDF exports fail.** Both SPAs fetch their faces from `/fonts/` at
-render time and neither has a CDN fallback, so a 404 on any of them kills every
-export. There are **six** files, and two carry spaces in the filename, requested
-`encodeURI`'d as `%20`. Check both tiers directly:
+**Malayalam PDF exports fail.** The admin and learner SPAs fetch their faces
+from `/fonts/` at render time and neither has a CDN fallback, so a 404 on any of
+them kills every export. There are **six** files in each, and two carry spaces
+in the filename, requested `encodeURI`'d as `%20`. Check both tiers directly:
 
 ```bash
 for svc in web learner; do
@@ -779,6 +787,18 @@ present under that exact name.
 > and its bold cut `Mandaram-Bold.ttf`. The container filesystem is case-sensitive
 > and developer machines are not, so a catalog string that drifts from the file
 > passes locally and 404s only here.
+
+The **writer** has its own `/fonts/` block and a smaller set, **two** files:
+`MANDARAM.ttf` and `NotoSansMalayalam.ttf` (its fallback face). No Century
+Schoolbook, no bold cut, so a `Mandaram-Bold.ttf` probe there 404s by design.
+Both of its faces must answer `200` with `Content-Type: font/ttf`:
+
+```bash
+for face in MANDARAM.ttf NotoSansMalayalam.ttf; do
+  docker compose -f compose.prod.yml -p qbank exec -T writer \
+    wget -S -q -O /dev/null "http://127.0.0.1/fonts/$face"
+done
+```
 
 **A frontend image fails to build with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`.**
 Its `Dockerfile` is not copying `pnpm-workspace.yaml` and `patches/` into the
@@ -870,8 +890,8 @@ footer. `GET /api/readyz` also returns the API's `buildId`.
 - **Run exactly one `api` container.** The AI-tagging queue worker holds an
   in-process lock; a second replica would double-process the queue. Scaling
   needs a distributed lock (a Mongo lease document) first.
-- **No monitoring yet.** Container logs are rotated (10 MB × 3), and both
-  services now report real health to Docker — so `docker ps` is a truthful
+- **No monitoring yet.** Container logs are rotated (10 MB × 3), and all five
+  services report real health to Docker — so `docker ps` is a truthful
   local signal, but nothing is watching it and nothing acts on it. Compose does
   not restart an unhealthy container. A log shipper and an external uptime check
   are still additive work. Whenever that happens, the acceptance test is *"a log
