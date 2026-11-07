@@ -4,9 +4,9 @@
 #
 #   ./scripts/deploy.sh <api|web|learner> <tag>
 #
-#     api      NestJS backend      (psc-archiver-api)
-#     web      staff back office   (psc-archiver-admin)
-#     learner  learner-facing app  (psc-archiver-client)
+#     api      NestJS backend      (qbank-api)
+#     web      staff back office   (qbank-admin)
+#     learner  learner-facing app  (qbank-learner)
 #
 # Invoked over SSH by GitHub Actions, and by hand for rollbacks. Safe to run
 # repeatedly; deploying the tag that is already live is a no-op restart.

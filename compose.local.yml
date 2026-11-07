@@ -7,9 +7,9 @@
 #
 #   Build from your working tree:   docker compose -f compose.local.yml up -d --build
 #   Run a published build:          API_TAG=<sha> WEB_TAG=<sha> LEARNER_TAG=<sha> \
-#                                     API_IMAGE=ghcr.io/mroshan74/psc-archiver-api \
-#                                     WEB_IMAGE=ghcr.io/mroshan74/psc-archiver-web \
-#                                     LEARNER_IMAGE=ghcr.io/mroshan74/psc-archiver-client \
+#                                     API_IMAGE=ghcr.io/mroshan74/qbank-api \
+#                                     WEB_IMAGE=ghcr.io/mroshan74/qbank-admin \
+#                                     LEARNER_IMAGE=ghcr.io/mroshan74/qbank-learner \
 #                                     docker compose -f compose.local.yml pull && ... up -d --no-build
 #   First-run bootstrap:            docker compose -f compose.local.yml --profile seed run --rm seed
 #
@@ -24,10 +24,10 @@
 # project's local compose pointed at the live Atlas cluster with full
 # read/write — a demo stack must not be able to damage real data.
 
-name: psc-archiver-local
+name: qbank-local
 
 x-api-env: &api-env
-  MONGODB_URI: mongodb://mongo:27017/pscarchiver
+  MONGODB_URI: mongodb://mongo:27017/qbank
   JWT_SECRET: local-only-not-a-real-secret
   PORT: "5000"
   NODE_ENV: production
@@ -72,9 +72,9 @@ services:
       start_period: 10s
 
   api:
-    image: ${API_IMAGE:-psc-archiver-api}:${API_TAG:-local}
+    image: ${API_IMAGE:-qbank-api}:${API_TAG:-local}
     build:
-      context: ../psc-archiver-api
+      context: ../qbank-api
       args:
         BUILD_VERSION: ${BUILD_VERSION:-local}
     restart: unless-stopped
@@ -96,9 +96,9 @@ services:
       start_period: 30s
 
   web:
-    image: ${WEB_IMAGE:-psc-archiver-web}:${WEB_TAG:-local}
+    image: ${WEB_IMAGE:-qbank-admin}:${WEB_TAG:-local}
     build:
-      context: ../psc-archiver-admin
+      context: ../qbank-admin
       args:
         BUILD_VERSION: ${BUILD_VERSION:-local}
     restart: unless-stopped
@@ -114,9 +114,9 @@ services:
       start_period: 5s
 
   learner:
-    image: ${LEARNER_IMAGE:-psc-archiver-client}:${LEARNER_TAG:-local}
+    image: ${LEARNER_IMAGE:-qbank-learner}:${LEARNER_TAG:-local}
     build:
-      context: ../psc-archiver-client
+      context: ../qbank-learner
       args:
         BUILD_VERSION: ${BUILD_VERSION:-local}
     restart: unless-stopped
@@ -135,7 +135,7 @@ services:
   # bundled papers and questions. Idempotent, safe to re-run.
   seed:
     profiles: [seed]
-    image: ${API_IMAGE:-psc-archiver-api}:${API_TAG:-local}
+    image: ${API_IMAGE:-qbank-api}:${API_TAG:-local}
     environment:
       <<: *api-env
       API_BASE_URL: http://api:5000

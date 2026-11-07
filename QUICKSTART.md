@@ -48,7 +48,7 @@ single-service deploy always times out.
 docker compose -f compose.prod.yml -p psc-archiver up -d
 ```
 
-Expect: `psc-archiver-api`, `psc-archiver-web` and `psc-archiver-learner` started.
+Expect: `qbank-api`, `qbank-admin` and `psc-archiver-learner` started.
 Give the api ~30s, then:
 
 ```bash
@@ -156,7 +156,7 @@ Then in a browser:
 
 ### Paper lifecycle audit (once, when the decision 0040 build first goes out)
 
-Read-only report of published papers with no questions and stale question counts, run inside the api container so it uses that container's `MONGODB_URI`. Exit `0` means clean. `--apply` moves empty published papers back to draft and refreshes the counts. Details: `psc-archiver-api/src/scripts/audit-paper-lifecycle.ts`.
+Read-only report of published papers with no questions and stale question counts, run inside the api container so it uses that container's `MONGODB_URI`. Exit `0` means clean. `--apply` moves empty published papers back to draft and refreshes the counts. Details: `qbank-api/src/scripts/audit-paper-lifecycle.ts`.
 
 ```bash
 docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts/audit-paper-lifecycle.js
@@ -165,7 +165,7 @@ docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts
 
 ### Question bank backfill (once, when the decision 0042 build first goes out, and required)
 
-Every question needs a `bank` (`pyq` or `external`) before the admin app can list it: each Question Bank page now asks for one bank, and a row from before the field matches neither, so an unbackfilled database shows **empty** Questions, My Questions and Review pages. Run it right after the new api image is up, inside the api container so it uses that container's `MONGODB_URI`. The first form only reports; `--apply` writes. It is safe to re-run, and rows the new build creates are stamped on write. Details: `psc-archiver-api/src/scripts/backfill-question-banks.ts`.
+Every question needs a `bank` (`pyq` or `external`) before the admin app can list it: each Question Bank page now asks for one bank, and a row from before the field matches neither, so an unbackfilled database shows **empty** Questions, My Questions and Review pages. Run it right after the new api image is up, inside the api container so it uses that container's `MONGODB_URI`. The first form only reports; `--apply` writes. It is safe to re-run, and rows the new build creates are stamped on write. Details: `qbank-api/src/scripts/backfill-question-banks.ts`.
 
 ```bash
 docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts/backfill-question-banks.js
@@ -176,7 +176,7 @@ docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts
 
 The decision 0045 build accepts only three source types (`exam_paper`, `current_affairs`, `custom`). A question still carrying a retired one (`textbook`, `manual`, `editorial`, `user`) fails validation on its next save, and a learner export containing it fails. The script rewrites those to `custom`, deleted rows included.
 
-Run it **from the new image before restarting the api**: pull, run it in a one-off container (the running api keeps serving, and it already accepts `custom`), then restart as in §5. The first form only reports; `--apply` writes. It is safe to re-run. Details: `psc-archiver-api/src/scripts/migrate-question-source-types.ts`.
+Run it **from the new image before restarting the api**: pull, run it in a one-off container (the running api keeps serving, and it already accepts `custom`), then restart as in §5. The first form only reports; `--apply` writes. It is safe to re-run. Details: `qbank-api/src/scripts/migrate-question-source-types.ts`.
 
 ```bash
 docker compose -f compose.prod.yml -p psc-archiver pull api
@@ -295,7 +295,7 @@ The prod-parity stack, which brings its own MongoDB and needs no Traefik, DNS or
 TLS. Use it to rehearse any of the above:
 
 ```bash
-cd psc-archiver-deploy
+cd qbank-deploy
 docker compose -f compose.local.yml down -v            # wipe the database
 docker compose -f compose.local.yml up -d --build
 docker compose -f compose.local.yml --profile seed run --rm seed

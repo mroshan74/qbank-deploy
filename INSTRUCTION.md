@@ -97,7 +97,7 @@ Once the above holds, the server is ready for the one-time application setup.
 Run it **as the account CI will connect as**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mroshan74/psc-archiver-deploy/main/scripts/setup-app.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mroshan74/qbank-deploy/main/scripts/setup-app.sh | bash
 ```
 
 It checks its prerequisites, clones this repo to `/opt/psc-archiver`, creates

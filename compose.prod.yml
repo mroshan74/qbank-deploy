@@ -18,7 +18,7 @@ services:
   api:
     # Resolved from .env, which deploy.sh rewrites on every deploy. Never
     # `:latest` — pinning the tag is what makes rollback a one-liner.
-    image: ${API_IMAGE:-ghcr.io/mroshan74/psc-archiver-api}:${API_TAG:?API_TAG is not set in .env}
+    image: ${API_IMAGE:-ghcr.io/mroshan74/qbank-api}:${API_TAG:?API_TAG is not set in .env}
     container_name: psc-archiver-api
     restart: unless-stopped
     env_file:
@@ -52,7 +52,7 @@ services:
       - "traefik.enable=false"
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/mroshan74/psc-archiver-web}:${WEB_TAG:?WEB_TAG is not set in .env}
+    image: ${WEB_IMAGE:-ghcr.io/mroshan74/qbank-admin}:${WEB_TAG:?WEB_TAG is not set in .env}
     container_name: psc-archiver-web
     restart: unless-stopped
     depends_on:
@@ -80,12 +80,12 @@ services:
       # Traefik can infer this from EXPOSE, but stating it removes the guess.
       - "traefik.http.services.archiver.loadbalancer.server.port=80"
 
-  # The learner-facing SPA (psc-archiver-client). Same shape as `web` — its own
+  # The learner-facing SPA (qbank-learner). Same shape as `web` — its own
   # nginx, its own /api proxy to the same api container, its own certificate.
   # Two SPAs cannot both own `/` behind one origin, which is why this is a
   # second hostname rather than a path prefix on the first.
   learner:
-    image: ${LEARNER_IMAGE:-ghcr.io/mroshan74/psc-archiver-client}:${LEARNER_TAG:?LEARNER_TAG is not set in .env}
+    image: ${LEARNER_IMAGE:-ghcr.io/mroshan74/qbank-learner}:${LEARNER_TAG:?LEARNER_TAG is not set in .env}
     container_name: psc-archiver-learner
     restart: unless-stopped
     depends_on:
@@ -130,7 +130,7 @@ services:
     profiles: [seed]
     # The same image the api service resolves, so the bootstrap always matches
     # the build that is actually deployed.
-    image: ${API_IMAGE:-ghcr.io/mroshan74/psc-archiver-api}:${API_TAG:?API_TAG is not set in .env}
+    image: ${API_IMAGE:-ghcr.io/mroshan74/qbank-api}:${API_TAG:?API_TAG is not set in .env}
     # Supplies MONGODB_URI, SEED_SUPERADMIN_*, SEEDER_DATA_DIR — the same file
     # the api container runs on, so the two can never disagree about the database.
     env_file:

@@ -9,11 +9,11 @@
 > **This roadmap advances one phase at a time.** Do the one phase that was asked
 > for, tick its boxes, report what was done, and **stop**. Do not continue into
 > the next phase unless explicitly told to. See the planning rule in the
-> workspace [CLAUDE.md](../../../CLAUDE.md) — `psc-archiver-deploy` has no
+> workspace [CLAUDE.md](../../../CLAUDE.md) — `qbank-deploy` has no
 > `CLAUDE.md` of its own, so that rule covers this repo.
 >
-> **Owner repo:** this one. Phases 3-5 touch `psc-archiver-api`,
-> `psc-archiver-admin`, `psc-archiver-client` and the workspace root; the
+> **Owner repo:** this one. Phases 3-5 touch `qbank-api`,
+> `qbank-admin`, `qbank-learner` and the workspace root; the
 > cross-repo seams follow [INTEGRATION.md](../../../INTEGRATION.md).
 
 ## Context
@@ -66,18 +66,18 @@ what the local prod-parity stack already does.
 |---|---|---|
 | F1 | `compose.prod.yml` had **no `seed` service and no profiles** | `compose.prod.yml` |
 | F2 | `seed-local.mjs` **never seeded taxonomy**; no automated path did | `scripts/seed-local.mjs` |
-| F3 | `POST /api/taxonomy/seed` accumulates a new version per call | `psc-archiver-api/src/taxonomy/taxonomy.service.ts:292` |
+| F3 | `POST /api/taxonomy/seed` accumulates a new version per call | `qbank-api/src/taxonomy/taxonomy.service.ts:292` |
 | F4 | Bootstrap URL says `/master/scripts/setup-app.sh`; this repo's only branch is **`main`**, so that curl 404s | `README.md:240`, `INSTRUCTION.md:100`, `scripts/setup-app.sh:8` |
 | F5 | Workspace `CLAUDE.md` claims deploy is on `master`; it is on `main` | workspace `CLAUDE.md` |
 | F6 | The bootstrap hardcoded `http://localhost:8080` in its closing message | `scripts/seed-local.mjs:149` |
-| F7 | `seed-superadmin.ts` now also creates the **System organization** at fixed `_id` `6a71ad994b228f7bf76fb570`. No deploy doc mentioned it | `psc-archiver-api/src/scripts/seed-superadmin.ts` |
-| F8 | ADR 0013 calls the seed files "untracked `data/dumb/`". They **are** tracked and **do** ship in the image | `psc-archiver-api/doc/decisions/0013-seeder-module.md` |
-| F9 | `doc/08-deployment.md` still describes content import as signing in and calling the endpoint | `psc-archiver-api/doc/08-deployment.md` |
-| F10 | `psc-archiver-admin/ARCHITECTURE.md` has **no Deployment section**; the client's is the model | both `ARCHITECTURE.md` |
-| F11 | Admin `README.md` `## Docker` still says `bash docker.sh`; that file was deleted | `psc-archiver-admin/README.md` |
-| F12 | Admin `.env.example` names `https://app.pscarchiver.in`; the real host is `archiver.trynbuild.com` | `psc-archiver-admin/.env.example` |
-| F13 | Client nginx `error_page … /50x.html` points at a file the client image does not ship | `psc-archiver-client/nginx.conf`, `public/` |
-| F14 | `VITE_CTA_STYLE` is absent from `.env.production` and has no Dockerfile ARG, so production silently takes the code default | `psc-archiver-client/.env.example` |
+| F7 | `seed-superadmin.ts` now also creates the **System organization** at fixed `_id` `6a71ad994b228f7bf76fb570`. No deploy doc mentioned it | `qbank-api/src/scripts/seed-superadmin.ts` |
+| F8 | ADR 0013 calls the seed files "untracked `data/dumb/`". They **are** tracked and **do** ship in the image | `qbank-api/doc/decisions/0013-seeder-module.md` |
+| F9 | `doc/08-deployment.md` still describes content import as signing in and calling the endpoint | `qbank-api/doc/08-deployment.md` |
+| F10 | `qbank-admin/ARCHITECTURE.md` has **no Deployment section**; the client's is the model | both `ARCHITECTURE.md` |
+| F11 | Admin `README.md` `## Docker` still says `bash docker.sh`; that file was deleted | `qbank-admin/README.md` |
+| F12 | Admin `.env.example` names `https://app.qbank.in`; the real host is `archiver.trynbuild.com` | `qbank-admin/.env.example` |
+| F13 | Client nginx `error_page … /50x.html` points at a file the client image does not ship | `qbank-learner/nginx.conf`, `public/` |
+| F14 | `VITE_CTA_STYLE` is absent from `.env.production` and has no Dockerfile ARG, so production silently takes the code default | `qbank-learner/.env.example` |
 
 ---
 
@@ -157,7 +157,7 @@ what the local prod-parity stack already does.
 
 ## Phase 3 — API deployment docs catch up ✅
 
-Owner repo: `psc-archiver-api`. Docs only, no code.
+Owner repo: `qbank-api`. Docs only, no code.
 
 - [x] **`doc/08-deployment.md` → "Bootstrapping a database"** — rewrite for the
       one-command path, add taxonomy and its guard, and record that
@@ -178,27 +178,27 @@ Owner repo: `psc-archiver-api`. Docs only, no code.
 
 - [x] `doc/08-deployment.md` and `QUICKSTART.md` describe the same commands with no
       contradiction.
-- [x] No doc in `psc-archiver-api/doc/` names `seed-local.mjs` or claims the seed
+- [x] No doc in `qbank-api/doc/` names `seed-local.mjs` or claims the seed
       data is untracked.
 
 ---
 
 ## Phase 4 — Frontend deploy-surface catch-up ✅
 
-Owner repos: `psc-archiver-admin`, `psc-archiver-client`.
+Owner repos: `qbank-admin`, `qbank-learner`.
 
-- [x] **`psc-archiver-admin/ARCHITECTURE.md`: add a `## Deployment` section** (F10),
-      mirroring `psc-archiver-client/ARCHITECTURE.md`: the hostname, the two-stage
+- [x] **`qbank-admin/ARCHITECTURE.md`: add a `## Deployment` section** (F10),
+      mirroring `qbank-learner/ARCHITECTURE.md`: the hostname, the two-stage
       image, push-to-`master` → GHCR `:<short-sha>` → `deploy.sh web <sha>`, rollback,
       the four-file install layer and why `--frozen-lockfile` must stay, the three
       load-bearing `nginx.conf` facts, and the `/fonts/` warning.
-- [x] **`psc-archiver-admin/README.md`** — replace the stale `## Docker` /
+- [x] **`qbank-admin/README.md`** — replace the stale `## Docker` /
       `bash docker.sh` block with a pointer to that section (F11).
-- [x] **`psc-archiver-admin/.env.example`** — production `VITE_APP_URL` example
+- [x] **`qbank-admin/.env.example`** — production `VITE_APP_URL` example
       becomes `https://archiver.trynbuild.com` (F12).
-- [x] **`psc-archiver-client/public/50x.html`** — add it, in learner voice, so the
+- [x] **`qbank-learner/public/50x.html`** — add it, in learner voice, so the
       `error_page` directive resolves (F13). Keep the no-em-dash rule.
-- [x] **`psc-archiver-client/.env.production`** — add an explicit `VITE_CTA_STYLE`
+- [x] **`qbank-learner/.env.production`** — add an explicit `VITE_CTA_STYLE`
       line (F14). Touches in-flight uncommitted work, so confirm the intended
       production value first.
 - [x] **Both `ARCHITECTURE.md` Deployment sections** — link `QUICKSTART.md` as the
@@ -276,7 +276,7 @@ Three things this rests on, all verified:
    Tested against a copy of `.env.example`.
 3. **Re-stamping `BUILD_ID` is load-bearing, not cosmetic.** A `latest` tag never
    changes, so without it sessions minted against the previous build survive a
-   refresh ([0004](../../../psc-archiver-api/doc/decisions/0004-stateless-jwt-with-profile.md))
+   refresh ([0004](../../../qbank-api/doc/decisions/0004-stateless-jwt-with-profile.md))
    and the build reported by `readyz` and the admin sidebar goes stale. `deploy.sh`
    gets this for free by writing the image tag into `BUILD_ID`.
 
@@ -305,6 +305,6 @@ short-SHA tags when the pipelines land, which is what `compose.prod.yml`'s "neve
   the eventual way to drop the HTTP hop entirely.
 - **Non-goal: trimming `data/exam-papers/` from the API image.** ~19 MB read by
   nothing, but that is the API repo's own cleanup.
-- **Phase 4 touches uncommitted work.** `psc-archiver-client` has ~19 modified files
+- **Phase 4 touches uncommitted work.** `qbank-learner` has ~19 modified files
   and two untracked ones in flight. Only `.env.production` and `public/50x.html` are
   in scope there; leave the rest alone.

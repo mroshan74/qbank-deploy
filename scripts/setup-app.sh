@@ -5,7 +5,7 @@
 # script; it only runs deploy.sh, which exists on the box because this ran.
 #
 #   ssh <account>@<vps>
-#   curl -fsSL https://raw.githubusercontent.com/<owner>/psc-archiver-deploy/main/scripts/setup-app.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/<owner>/qbank-deploy/main/scripts/setup-app.sh | bash
 #
 # or clone the repo first and run it locally. Safe to re-run.
 #
@@ -44,7 +44,7 @@ note() { echo -e "${YELLOW}$*${NC}"; }
 fail() { echo -e "${RED}✗ $*${NC}" >&2; exit 1; }
 
 APP_DIR="${APP_DIR:-/opt/psc-archiver}"
-REPO_URL="${REPO_URL:-https://github.com/mroshan74/psc-archiver-deploy.git}"
+REPO_URL="${REPO_URL:-https://github.com/mroshan74/qbank-deploy.git}"
 RUN_AS="$(id -un)"
 
 # ── Prompting ──────────────────────────────────────────────────────────────
@@ -223,15 +223,15 @@ Remaining steps:
      OPENAI_API_KEY. Set CLIENT_URL to BOTH https:// origins, comma-separated —
      it replaces the API's fallback list rather than extending it.
 
-  2. In ALL THREE app repos' GitHub settings (psc-archiver-api,
-     psc-archiver-admin, psc-archiver-client), set the deploy secrets. VPS_USER
+  2. In ALL THREE app repos' GitHub settings (qbank-api,
+     qbank-admin, qbank-learner), set the deploy secrets. VPS_USER
      is the account this script just ran as — CI has to be that same account, or
      it cannot write to $APP_DIR:
        VPS_USER                 $RUN_AS
        VPS_HOST                 this server's IP or hostname
        VPS_SSH_KEY              private half of a key dedicated to CI
        VPS_SSH_KEY_PASSPHRASE   its passphrase
-     Generate the key with e.g. \`ssh-keygen -t ed25519 -C psc-archiver-ci\`,
+     Generate the key with e.g. \`ssh-keygen -t ed25519 -C qbank-ci\`,
      and have its PUBLIC half installed on '$RUN_AS' by whoever manages server
      access — this script never writes authorized_keys.
 

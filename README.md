@@ -1,8 +1,8 @@
-# psc-archiver-deploy
+# qbank-deploy
 
-Deployment configuration for **PSC Archiver** — the NestJS API (`psc-archiver-api`)
-and its two React SPAs: the staff back office (`psc-archiver-admin`) and the
-learner-facing app (`psc-archiver-client`).
+Deployment configuration for **PSC Archiver** — the NestJS API (`qbank-api`)
+and its two React SPAs: the staff back office (`qbank-admin`) and the
+learner-facing app (`qbank-learner`).
 
 Infrastructure lives in its own repo on purpose. In the two predecessor
 projects it was buried inside an application repo, and in both cases the copy
@@ -25,7 +25,7 @@ Fill these in — the checked-in files use placeholders.
 | `LEARNER_HOST` | `.env` | Learner-app hostname, e.g. `learner.trynbuild.com` |
 | `CLIENT_URL` | `.env` | The API's CORS allow-list. Must name **both** origins, comma-separated |
 | `ACME_EMAIL` | passed to `compose.traefik.yml` | Where Let's Encrypt sends expiry warnings |
-| `REPO_URL` | `scripts/setup-app.sh` | This repo's clone URL, if not `mroshan74/psc-archiver-deploy` |
+| `REPO_URL` | `scripts/setup-app.sh` | This repo's clone URL, if not `mroshan74/qbank-deploy` |
 | `API_IMAGE` / `WEB_IMAGE` / `LEARNER_IMAGE` | `.env` | GHCR paths, if the owner is not `mroshan74` |
 | `MONGODB_URI`, `JWT_SECRET`, `OPENAI_API_KEY` | `.env` | Real credentials |
 | `MESSAGE_CENTRAL_CUSTOMER_ID`, `MESSAGE_CENTRAL_KEY` | `.env` | Learner sign-in by SMS. The **key is the account password base64-encoded**, not the password |
@@ -113,10 +113,10 @@ production. It is the fastest way to see the app, demo it, or check a change
 before pushing — and it is where the deployment setup itself gets tested.
 
 ```bash
-# clone next to psc-archiver-api, psc-archiver-admin and psc-archiver-client —
+# clone next to qbank-api, qbank-admin and qbank-learner —
 # the compose build contexts are ../<repo>, so all four sit side by side
 git clone <this repo>
-cd psc-archiver-deploy
+cd qbank-deploy
 
 docker compose -f compose.local.yml up -d --build          # builds your working tree
 docker compose -f compose.local.yml --profile seed run --rm seed   # first run only
@@ -172,7 +172,7 @@ no edits to the seed files therefore reports **zero of both**:
 > seeder-owned collections and seed again:
 >
 > ```bash
-> docker compose -f compose.local.yml exec mongo mongosh pscarchiver \
+> docker compose -f compose.local.yml exec mongo mongosh qbank \
 >   --eval 'db.questions.drop(); db.exampapers.drop()'
 > docker compose -f compose.local.yml --profile seed run --rm seed
 > ```
@@ -235,14 +235,14 @@ taxonomy change ships as a new version rather than an edit to the old one.
 > taxonomy edit that changes labels, scope, tags, rules or the revision still
 > needs `SEED_TAXONOMY_FORCE=1` on an existing database, as the paragraph above
 > describes. Details, the exit plan and the image-size options:
-> [psc-archiver-api/doc/taxonomy/local-seed-classification.md](../psc-archiver-api/doc/taxonomy/local-seed-classification.md).
+> [qbank-api/doc/taxonomy/local-seed-classification.md](../qbank-api/doc/taxonomy/local-seed-classification.md).
 
 To run an exact published build instead of your working tree:
 
 ```bash
-export API_IMAGE=ghcr.io/mroshan74/psc-archiver-api
-export WEB_IMAGE=ghcr.io/mroshan74/psc-archiver-web
-export LEARNER_IMAGE=ghcr.io/mroshan74/psc-archiver-client
+export API_IMAGE=ghcr.io/mroshan74/qbank-api
+export WEB_IMAGE=ghcr.io/mroshan74/qbank-admin
+export LEARNER_IMAGE=ghcr.io/mroshan74/qbank-learner
 export API_TAG=a1b2c3d WEB_TAG=a1b2c3d LEARNER_TAG=a1b2c3d
 docker compose -f compose.local.yml pull
 docker compose -f compose.local.yml up -d --no-build
@@ -290,7 +290,7 @@ which is on the server because this put it there.
 
 ```bash
 ssh <account>@<vps>
-curl -fsSL https://raw.githubusercontent.com/mroshan74/psc-archiver-deploy/main/scripts/setup-app.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mroshan74/qbank-deploy/main/scripts/setup-app.sh | bash
 ```
 
 **Whichever account you SSH in as is the account CI must use.** The script
@@ -323,12 +323,12 @@ login you completed does not sit there looking pending. Prompts read from
 **A key dedicated to CI.** Generate one (don't reuse a personal key):
 
 ```bash
-ssh-keygen -t ed25519 -C psc-archiver-ci -f ci-deploy-key
+ssh-keygen -t ed25519 -C qbank-ci -f ci-deploy-key
 ```
 
 Hand `ci-deploy-key.pub` to whoever manages access on that server, to be
 installed on the account above. Then, in the GitHub settings of **all three**
-app repos — `psc-archiver-api`, `psc-archiver-admin`, `psc-archiver-client` —
+app repos — `qbank-api`, `qbank-admin`, `qbank-learner` —
 add these secrets:
 
 | Secret | Value |
@@ -374,9 +374,9 @@ the `setup-app.sh` bootstrap URL both track.)
 
 | Repo | Service | Image |
 |---|---|---|
-| `psc-archiver-api` | `api` | `ghcr.io/mroshan74/psc-archiver-api` |
-| `psc-archiver-admin` | `web` | `ghcr.io/mroshan74/psc-archiver-web` |
-| `psc-archiver-client` | `learner` | `ghcr.io/mroshan74/psc-archiver-client` |
+| `qbank-api` | `api` | `ghcr.io/mroshan74/qbank-api` |
+| `qbank-admin` | `web` | `ghcr.io/mroshan74/qbank-admin` |
+| `qbank-learner` | `learner` | `ghcr.io/mroshan74/qbank-learner` |
 
 By hand, on the server:
 
@@ -493,7 +493,7 @@ docker compose -f compose.prod.yml -p psc-archiver up -d
 ```
 
 **Re-stamping `BUILD_ID` is not cosmetic.** It is what retires sessions minted by
-the previous build ([0004](../psc-archiver-api/doc/decisions/0004-stateless-jwt-with-profile.md)),
+the previous build ([0004](../qbank-api/doc/decisions/0004-stateless-jwt-with-profile.md)),
 which `deploy.sh` gets for free by writing the image tag into it. A `latest` tag
 never changes, so without this line a tester keeps a token issued against the old
 build and the version reported by `GET /api/readyz` and in the admin sidebar goes
@@ -675,7 +675,7 @@ including on `kill -9` — so if nothing is running, simply retry.
 **A container sits at `(unhealthy)`.** Read the last probe's actual output:
 
 ```bash
-docker inspect --format '{{json .State.Health}}' psc-archiver-api | jq
+docker inspect --format '{{json .State.Health}}' qbank-api | jq
 ```
 
 For `api` this almost always means `/api/readyz` is returning 503 because
@@ -689,8 +689,8 @@ env var — the app deliberately refuses to boot without `MONGODB_URI` and
 
 **502 on `/api` while the api container is healthy.** Applies to both `web` and
 `learner`. Their nginx resolves the api by name through Docker's embedded DNS
-(`resolver 127.0.0.11` in `psc-archiver-admin/nginx.conf` and
-`psc-archiver-client/nginx.conf`) and re-resolves it every 10s, so a recreated
+(`resolver 127.0.0.11` in `qbank-admin/nginx.conf` and
+`qbank-learner/nginx.conf`) and re-resolves it every 10s, so a recreated
 api container with a new IP is picked up on its own. A 502 in the ~10s right
 after a deploy is that DNS cache expiring and is expected — the deploy probe
 retries through it. A *persistent* 502 means the running web image predates that
@@ -757,7 +757,7 @@ COPY patches ./patches
 **Do not "fix" this by dropping `--frozen-lockfile`.** That installs the package
 unpatched, the build goes green, every export succeeds, and every fraction and
 subscript in every paper is silently misplaced by up to 4.49pt. Background:
-[psc-archiver-admin/docs/todos/frontend-image-build-patch-manifests.md](../psc-archiver-admin/docs/todos/frontend-image-build-patch-manifests.md).
+[qbank-admin/docs/todos/frontend-image-build-patch-manifests.md](../qbank-admin/docs/todos/frontend-image-build-patch-manifests.md).
 
 **`network traefik_proxy declared as external, but could not be found`.** The
 Traefik stack hasn't been started on this server yet — it is what creates that

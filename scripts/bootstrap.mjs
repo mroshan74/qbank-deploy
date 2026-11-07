@@ -165,7 +165,7 @@ async function checkContent(token) {
       `Refusing to import: ${result.questionsUnmatchedCount} questions on these papers are not in the seed files.\n` +
         '[seed] That is what a database seeded before _id matching looks like — importing would add a second copy of every question.\n' +
         '[seed] Drop the seeder-owned collections (questions, exampapers) and run this again.\n' +
-        "[seed] On the local stack:  docker compose -f compose.local.yml exec mongo mongosh pscarchiver --eval 'db.questions.drop(); db.exampapers.drop()'\n" +
+        "[seed] On the local stack:  docker compose -f compose.local.yml exec mongo mongosh qbank --eval 'db.questions.drop(); db.exampapers.drop()'\n" +
         '[seed] On a server the database is Atlas, so clear it there.\n' +
         '[seed] Or set SEED_FORCE=1 if you are certain those extra questions should stay.',
     )
