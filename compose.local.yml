@@ -6,15 +6,17 @@
 # server.
 #
 #   Build from your working tree:   docker compose -f compose.local.yml up -d --build
-#   Run a published build:          API_TAG=<sha> WEB_TAG=<sha> LEARNER_TAG=<sha> WRITER_TAG=<sha> \
+#   Run a published build:          API_TAG=<sha> WEB_TAG=<sha> LEARNER_TAG=<sha> WRITER_TAG=<sha> HOMEPAGE_TAG=<sha> \
 #                                     API_IMAGE=ghcr.io/mroshan74/qbank-api \
 #                                     WEB_IMAGE=ghcr.io/mroshan74/qbank-admin \
-#                                     LEARNER_IMAGE=ghcr.io/mroshan74/qbank-learner \n#                                     WRITER_IMAGE=ghcr.io/mroshan74/qbank-writer \
+#                                     LEARNER_IMAGE=ghcr.io/mroshan74/qbank-learner \
+#                                     WRITER_IMAGE=ghcr.io/mroshan74/qbank-writer \
+#                                     HOMEPAGE_IMAGE=ghcr.io/mroshan74/qbank-homepage \
 #                                     docker compose -f compose.local.yml pull && ... up -d --no-build
 #   First-run bootstrap:            docker compose -f compose.local.yml --profile seed run --rm seed
 #
-# Then open  http://localhost:8080 (admin),  http://localhost:8081 (learner)
-# and  http://localhost:8082 (writer)
+# Then open  http://localhost:8080 (admin),  http://localhost:8081 (learner),
+# http://localhost:8082 (writer)  and  http://localhost:8083 (homepage)
 #
 # The learner container is the only place the client's /api proxy and its PDF
 # fonts get exercised before a server sees them — `pnpm dev` is cross-origin to
@@ -35,7 +37,8 @@ x-api-env: &api-env
   # Every frontend. Setting this REPLACES the API's fallback list rather than
   # extending it, so every origin has to be named here. (Each SPA is
   # same-origin behind its own nginx, so CORS never actually fires here; the
-  # list is kept complete so it stays true if that ever changes.)
+  # list is kept complete so it stays true if that ever changes.) The homepage
+  # (:8083) makes no API call and is deliberately absent.
   CLIENT_URL: http://localhost:8080,http://localhost:8081,http://localhost:8082
   BUILD_ID: ${BUILD_VERSION:-local}
   # Kept on locally — it is the quickest way to poke at the API by hand.
@@ -147,6 +150,24 @@ services:
       - "${WRITER_PORT:-8082}:80"
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # The marketing site (qbank-homepage). Static: no /api proxy, no dependency
+  # on the api, probed at its own /healthz.
+  homepage:
+    image: ${HOMEPAGE_IMAGE:-qbank-homepage}:${HOMEPAGE_TAG:-local}
+    build:
+      context: ../qbank-homepage
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-local}
+    restart: unless-stopped
+    ports:
+      - "${HOMEPAGE_PORT:-8083}:80"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       interval: 30s

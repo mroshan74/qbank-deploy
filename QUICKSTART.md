@@ -15,9 +15,9 @@ No commands. Confirm these are true before pasting anything:
 
 - [ ] The box is provisioned and Docker works for your account: [INSTRUCTION.md](INSTRUCTION.md) steps 1-3, verified with `docker info`.
 - [ ] `scripts/setup-app.sh` has been run once, so `/opt/qbank` exists, holds this repo, and has a filled-in `.env`.
-- [ ] `docker login ghcr.io` has been done once on this account (the three GHCR packages are private).
-- [ ] Every DNS A record (`ADMIN_HOST`, `LEARNER_HOST`, `WRITER_HOST`) resolves to this server.
-- [ ] `API_TAG`, `WEB_TAG`, `LEARNER_TAG` and `WRITER_TAG` in `.env` name **published** tags.
+- [ ] `docker login ghcr.io` has been done once on this account (the five GHCR packages are private).
+- [ ] Every DNS A record (`HOMEPAGE_HOST` **and** `www.` under it, `ADMIN_HOST`, `LEARNER_HOST`, `WRITER_HOST`) resolves to this server.
+- [ ] `API_TAG`, `WEB_TAG`, `LEARNER_TAG`, `WRITER_TAG` and `HOMEPAGE_TAG` in `.env` name **published** tags.
 - [ ] **The database is empty.** Production runs on MongoDB Atlas, so there is no container to wipe and `down -v` clears nothing. Clear it in Atlas yourself. Nothing in this repo deletes data.
 
 If any of those is not true, start from [README.md → Set up the application](README.md#set-up-the-application) instead.
@@ -126,13 +126,15 @@ the database and start from step 3 instead.
 ## 4. Verify
 
 ```bash
-# both nginx tiers reach the api through their own /api proxy
+# the three app tiers reach the api through their own /api proxy
 docker compose -f compose.prod.yml -p qbank exec -T web     wget -q -O- http://127.0.0.1/api/readyz
 docker compose -f compose.prod.yml -p qbank exec -T learner wget -q -O- http://127.0.0.1/api/readyz
 docker compose -f compose.prod.yml -p qbank exec -T writer  wget -q -O- http://127.0.0.1/api/readyz
+# the homepage has no /api; it answers its own health probe
+docker compose -f compose.prod.yml -p qbank exec -T homepage wget -q -O- http://127.0.0.1/healthz
 ```
 
-Expect: `{"status":"ok","database":"connected","buildId":"..."}` from each.
+Expect: `{"status":"ok","database":"connected","buildId":"..."}` from each app tier, `ok` from the homepage.
 
 ```bash
 # the PDF faces, including the one with spaces in its name
@@ -152,7 +154,8 @@ export will fail several layers away from the cause.
 
 Then in a browser:
 
-- `https://<ADMIN_HOST>` — sign in as the seeded superadmin, set a new password when prompted, confirm the taxonomy page shows subjects and the exam papers list shows 163.
+- `https://<HOMEPAGE_HOST>` — the marketing site renders; `curl -sI https://www.<HOMEPAGE_HOST>/` answers `301` with a `Location:` on the apex; the Sign in to Studio link opens `https://<ADMIN_HOST>`.
+- `https://<ADMIN_HOST>` — lands on `/login` (the root redirects there for a visitor); sign in as the seeded superadmin, set a new password when prompted, confirm the taxonomy page shows subjects and the exam papers list shows 163.
 - `https://<LEARNER_HOST>` — sign in by mobile number, open a paper, download it, and confirm the Malayalam renders.
 - `https://<WRITER_HOST>` — create a `writer` account in the admin and assign it a draft exam paper; sign in with it, open the paper, add a question, and confirm the Malayalam renders. Also check the writer's Malayalam face: `docker compose -f compose.prod.yml -p qbank exec -T writer wget -S -q -O /dev/null http://127.0.0.1/fonts/MANDARAM.ttf` answers `200` with `font/ttf`.
 
@@ -281,6 +284,7 @@ cd /opt/qbank
 ./scripts/deploy.sh web     <sha>   # staff back office
 ./scripts/deploy.sh learner <sha>   # learner app
 ./scripts/deploy.sh writer  <sha>   # writer portal
+./scripts/deploy.sh homepage <sha>  # marketing site
 ```
 
 Roll back:
@@ -305,44 +309,113 @@ docker compose -f compose.local.yml --profile seed run --rm seed
 # → http://localhost:8080  (admin)
 # → http://localhost:8081  (learner)
 # → http://localhost:8082  (writer)
+# → http://localhost:8083  (homepage)
 ```
 
 ---
 
-## Adding the writer portal to a running server
+## Adding a frontend tier to a running server
 
-Once, when `qbank-writer` first goes out. **The order matters**: this repo's
-`.env.example` names three new keys, `deploy.sh` checks the server's `.env`
-against it after pulling this repo, and a missing key stops **every** service's
-deploy, not just the writer's.
+Once per new tier (the writer portal and the marketing site both arrive this
+way; the worked example below is the writer's). **The order matters**: this
+repo's `.env.example` names three new keys (`X_HOST`, `X_TAG`, `X_IMAGE`),
+`deploy.sh` checks the server's `.env` against it after pulling this repo, and a
+missing key stops **every** service's deploy, not just the new tier's.
 
-1. **DNS:** point `WRITER_HOST` (e.g. `writer.trynbuild.com`) at this server and
-   let it propagate. Let's Encrypt cannot issue the certificate until it does.
-2. **`.env` first:** add the three keys, and the new origin to `CLIENT_URL`:
+1. **DNS:** point the new host (`WRITER_HOST`, `writer.qfoundry.in`) at this
+   server and let it propagate. Let's Encrypt cannot issue the certificate until
+   it does. For the homepage that is **two** records, the apex and `www.`, which
+   share one certificate.
+2. **`.env` first:** add the three keys, and, for an app tier, the new origin to
+   `CLIENT_URL` (the homepage makes no API call and is not listed there):
    ```bash
    cd /opt/qbank
    cat >> .env <<'KEYS'
-   WRITER_HOST=writer.trynbuild.com
+   WRITER_HOST=writer.qfoundry.in
    WRITER_TAG=latest
    WRITER_IMAGE=ghcr.io/mroshan74/qbank-writer
    KEYS
-   nano .env   # append ,https://writer.trynbuild.com to CLIENT_URL
+   nano .env   # append ,https://writer.qfoundry.in to CLIENT_URL
    ```
-3. **GitHub:** in `qbank-writer`'s repository settings set the four deploy secrets
+3. **GitHub:** in the new repo's settings set the four deploy secrets
    (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_SSH_KEY_PASSPHRASE`), the same
    values the other app repos use.
-4. **Push this repo** (the `writer` service, scripts and docs), then pull it here:
+4. **Push this repo** (the new service, scripts and docs), then pull it here:
    `git -C /opt/qbank pull --ff-only`.
-5. **First image:** push `qbank-writer` to `main`. CI lints, checks the env files
-   and the copy, builds, publishes `ghcr.io/mroshan74/qbank-writer` and runs
-   `deploy.sh writer <sha>`. Make the new GHCR package **private**, like the
+5. **First image:** push the new repo to `main`. CI lints, checks the env files
+   and the copy, builds, publishes `ghcr.io/mroshan74/<repo>` and runs
+   `deploy.sh <service> <sha>`. Make the new GHCR package **private**, like the
    others, so the server's stored login keeps working.
-6. **Verify:** §4's `writer` lines, then `https://<WRITER_HOST>` in a browser.
-7. **The API build with decision 0056** (the writer limits) must be live before
-   writers use the portal: deploy `qbank-api` first if it is not.
+6. **Verify:** §4's lines for the tier, then its host in a browser.
+7. For the writer: **the API build with decision 0056** (the writer limits) must
+   be live before writers use the portal; deploy `qbank-api` first if it is not.
 
-Roll back the writer alone with `./scripts/rollback.sh writer <tag>`; nothing
+Roll back the tier alone with `./scripts/rollback.sh <service> <tag>`; nothing
 else restarts.
+
+## One-time: moving to the qfoundry.in hosts and adding the homepage
+
+Phase 4 of the workspace roadmap `docs/roadmaps/qfoundry-brand-and-hostnames.md`.
+Delete this section afterwards. It folds in two older one-time jobs: the
+`psc-archiver` → `qbank` server move (the section at the end of this file, run
+it as step 0 if the server is still `/opt/psc-archiver`) and the writer portal's
+first deploy. Nothing is pushed from any app repo before step 4: every workflow's
+SSH step calls `/opt/qbank/scripts/deploy.sh`, and the admin push removes the old
+marketing pages, so the homepage must be live first.
+
+```bash
+# 0. If the server is still /opt/psc-archiver: run the "moving the server from
+#    psc-archiver to qbank" steps 2 (down, mv, remote, image names, database)
+#    below, but do NOT seed yet.
+
+# 1. DNS at the registrar, low TTL, all A records on this server's IP:
+#    qfoundry.in (@), www.qfoundry.in, studio.qfoundry.in, prep.qfoundry.in,
+#    writer.qfoundry.in. Leave the old trynbuild records until step 6.
+dig +short qfoundry.in www.qfoundry.in studio.qfoundry.in prep.qfoundry.in writer.qfoundry.in
+
+# 2. GitHub: create the private repo mroshan74/qbank-homepage; set the four
+#    VPS_* secrets on qbank-homepage and on qbank-writer (same values as the
+#    other app repos).
+
+# 3. The server .env, BEFORE pulling this repo (a missing key stops every deploy):
+cd /opt/qbank
+sed -i 's|^ADMIN_HOST=.*|ADMIN_HOST=studio.qfoundry.in|; s|^LEARNER_HOST=.*|LEARNER_HOST=prep.qfoundry.in|' .env
+grep -q '^WRITER_HOST=' .env || cat >> .env <<'KEYS'
+WRITER_HOST=writer.qfoundry.in
+WRITER_TAG=latest
+WRITER_IMAGE=ghcr.io/mroshan74/qbank-writer
+KEYS
+sed -i 's|^WRITER_HOST=.*|WRITER_HOST=writer.qfoundry.in|' .env
+cat >> .env <<'KEYS'
+HOMEPAGE_HOST=qfoundry.in
+HOMEPAGE_TAG=latest
+HOMEPAGE_IMAGE=ghcr.io/mroshan74/qbank-homepage
+KEYS
+sed -i 's|^CLIENT_URL=.*|CLIENT_URL=https://studio.qfoundry.in,https://prep.qfoundry.in,https://writer.qfoundry.in|' .env
+
+# 4. Push qbank-deploy, then pull it here. Traefik picks up the new Host()
+#    rules on the next `up`; the old hosts answer 404 from here until step 6.
+git -C /opt/qbank pull --ff-only
+
+# 5. Push the app repos IN THIS ORDER, letting each CI run finish:
+#    qbank-api, qbank-homepage, qbank-learner, qbank-writer, qbank-admin (last).
+#    Each run builds :<sha> and :latest and calls deploy.sh <svc> <sha>; the
+#    first homepage and writer deploys create their containers and Traefik
+#    requests the four certificates (watch `docker logs traefik` for ACME).
+#    If step 0 ran, reseed the empty qbank database afterwards instead:
+./scripts/deploy-latest.sh --seed      # only after a step-0 move
+#    then pin the tags with each repo's workflow (tag = <sha>) or deploy.sh.
+
+# 6. Verify, then clean up:
+curl -sI https://www.qfoundry.in/ | grep -i '^location'        # the apex
+curl -s https://qfoundry.in/healthz                             # ok
+for h in studio prep writer; do curl -s https://$h.qfoundry.in/api/readyz; echo; done
+#    In a browser: studio/ lands on /login; a staff, a writer and a learner
+#    sign-in; a community-organization PDF shows "Prepared with QFoundry".
+#    Make the qbank-homepage and qbank-writer GHCR packages private.
+#    Remove the trynbuild DNS records (no redirects: it was the QA domain).
+#    Run `rollback.sh homepage <tag>` once to prove the path, then re-deploy.
+```
 
 Default account: `superadmin` / `ChangeMe123!`, override with
 `SEED_SUPERADMIN_USERNAME` / `SEED_SUPERADMIN_PASSWORD`. The learner's one-time
@@ -361,7 +434,7 @@ code is printed in `docker compose -f compose.local.yml logs api`.
 | `unauthorized` / `denied` pulling an image | No GHCR login on this account, or a fine-grained PAT instead of a classic one with `read:packages` |
 | `manifest unknown` pulling `:latest` | That repo's workflow has never completed a build, so no `:latest` exists yet. Push once, or set that one tag back to a short SHA that does exist |
 | A refresh pulled nothing and the app looks unchanged | `:latest` has not moved since the last pull. Confirm the build actually ran, then compare `docker compose -f compose.prod.yml -p qbank images` before and after |
-| Certificate not issued | DNS does not resolve yet. `dig +short <ADMIN_HOST>`, then `docker logs traefik` |
+| Certificate not issued | DNS does not resolve yet. `dig +short` the host (for the homepage **both** the apex and `www.`, they share one certificate), then `docker logs traefik` |
 
 Longer list, with the reasoning: [README.md → Troubleshooting](README.md#troubleshooting).
 

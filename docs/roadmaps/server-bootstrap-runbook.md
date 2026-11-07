@@ -75,7 +75,7 @@ what the local prod-parity stack already does.
 | F9 | `doc/08-deployment.md` still describes content import as signing in and calling the endpoint | `qbank-api/doc/08-deployment.md` |
 | F10 | `qbank-admin/ARCHITECTURE.md` has **no Deployment section**; the client's is the model | both `ARCHITECTURE.md` |
 | F11 | Admin `README.md` `## Docker` still says `bash docker.sh`; that file was deleted | `qbank-admin/README.md` |
-| F12 | Admin `.env.example` names `https://app.qbank.in`; the real host is `archiver.trynbuild.com` | `qbank-admin/.env.example` |
+| F12 | Admin `.env.example` names `https://app.qbank.in`; the real host is `studio.qfoundry.in` | `qbank-admin/.env.example` |
 | F13 | Client nginx `error_page … /50x.html` points at a file the client image does not ship | `qbank-learner/nginx.conf`, `public/` |
 | F14 | `VITE_CTA_STYLE` is absent from `.env.production` and has no Dockerfile ARG, so production silently takes the code default | `qbank-learner/.env.example` |
 
@@ -195,7 +195,7 @@ Owner repos: `qbank-admin`, `qbank-learner`.
 - [x] **`qbank-admin/README.md`** — replace the stale `## Docker` /
       `bash docker.sh` block with a pointer to that section (F11).
 - [x] **`qbank-admin/.env.example`** — production `VITE_APP_URL` example
-      becomes `https://archiver.trynbuild.com` (F12).
+      becomes `https://studio.qfoundry.in` (F12).
 - [x] **`qbank-learner/public/50x.html`** — add it, in learner voice, so the
       `error_page` directive resolves (F13). Keep the no-em-dash rule.
 - [x] **`qbank-learner/.env.production`** — add an explicit `VITE_CTA_STYLE`

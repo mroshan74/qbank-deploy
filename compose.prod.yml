@@ -2,13 +2,15 @@
 # scripts/deploy.sh — do not run `docker compose` here by hand except to
 # inspect state.
 #
-# Three public hostnames, each its own origin: Traefik terminates TLS and routes
-# ADMIN_HOST to `web` (the staff back office), LEARNER_HOST to `learner` (the
-# learner app) and WRITER_HOST to `writer` (the question writer portal). Each
-# container serves its own SPA and proxies /api to the shared api container
-# over the internal network. The api is never routed directly, so there is no
-# CORS in production — but there are three certificates, and every hostname
-# must resolve to this server before its first deploy.
+# Four public hostnames, each its own origin: Traefik terminates TLS and routes
+# HOMEPAGE_HOST (the apex, plus www. redirecting to it) to `homepage` (the
+# marketing site), ADMIN_HOST to `web` (the staff back office), LEARNER_HOST to
+# `learner` (the learner app) and WRITER_HOST to `writer` (the question writer
+# portal). Each app container serves its own SPA and proxies /api to the shared
+# api container over the internal network; the homepage is static and proxies
+# nothing. The api is never routed directly, so there is no CORS in production
+# — but there are four certificates, and every hostname (www. included) must
+# resolve to this server before its first deploy.
 
 # docker compose -f compose.prod.yml -p qbank up -d
 
@@ -147,6 +149,41 @@ services:
       - "traefik.http.routers.writer.entrypoints=websecure"
       - "traefik.http.routers.writer.tls.certresolver=letsencrypt"
       - "traefik.http.services.writer.loadbalancer.server.port=80"
+
+  # The marketing site (qbank-homepage) at the apex. Static: no /api proxy, no
+  # dependency on the api, and the deploy probe is its own /healthz. One router
+  # answers both the apex and www., and a middleware sends www. to the apex;
+  # Traefik puts both names on one certificate, so the TLS challenge fails for
+  # both if either does not resolve here.
+  homepage:
+    image: ${HOMEPAGE_IMAGE:-ghcr.io/mroshan74/qbank-homepage}:${HOMEPAGE_TAG:?HOMEPAGE_TAG is not set in .env}
+    container_name: qbank-homepage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - traefik_proxy
+    labels:
+      - "traefik.enable=true"
+      # Unique across the Docker provider, like the other three routers.
+      - "traefik.http.routers.homepage.rule=Host(`${HOMEPAGE_HOST:?HOMEPAGE_HOST is not set in .env}`) || Host(`www.${HOMEPAGE_HOST}`)"
+      - "traefik.http.routers.homepage.entrypoints=websecure"
+      - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.homepage.middlewares=homepage-www-to-apex"
+      # `$$` is compose's escape for a literal `$`, so Traefik receives `${1}`.
+      - "traefik.http.middlewares.homepage-www-to-apex.redirectregex.regex=^https://www\\.(.*)"
+      - "traefik.http.middlewares.homepage-www-to-apex.redirectregex.replacement=https://$${1}"
+      - "traefik.http.middlewares.homepage-www-to-apex.redirectregex.permanent=true"
+      - "traefik.http.services.homepage.loadbalancer.server.port=80"
 
   # One-shot bootstrap for a fresh database, the production twin of the `seed`
   # service in compose.local.yml. Run it after the stack is up:

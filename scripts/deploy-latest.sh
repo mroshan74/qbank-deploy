@@ -106,11 +106,12 @@ set_key() {
 }
 
 PREVIOUS="$(sed -n 's/^API_TAG=//p' "$ENV_FILE" | head -1)"
-step "Setting API_TAG / WEB_TAG / LEARNER_TAG / WRITER_TAG to '${TAG}' (api was ${PREVIOUS:-unset})"
+step "Setting API_TAG / WEB_TAG / LEARNER_TAG / WRITER_TAG / HOMEPAGE_TAG to '${TAG}' (api was ${PREVIOUS:-unset})"
 set_key API_TAG "$TAG"
 set_key WEB_TAG "$TAG"
 set_key LEARNER_TAG "$TAG"
 set_key WRITER_TAG "$TAG"
+set_key HOMEPAGE_TAG "$TAG"
 
 # The API stamps BUILD_ID into every token it issues, so changing it retires
 # sessions minted by the previous build. A floating tag never changes on its
@@ -144,18 +145,26 @@ docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d
 
 # ── 5. Verify through EVERY nginx tier ─────────────────────────────────────
 # Everything restarted, so every proxy is worth proving rather than just one
-# the way a single-service deploy does.
+# the way a single-service deploy does. The three app tiers are proved through
+# their /api proxy; the homepage has none (a static site) and answers /healthz.
 probe() {
   # 127.0.0.1, NOT localhost: BusyBox wget tries ::1 first and nginx's
   # `listen 80` is IPv4-only, so the localhost form can only ever time out.
   docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" \
-    exec -T "$1" wget -q -O /dev/null "http://127.0.0.1/api/readyz" 2>/dev/null
+    exec -T "$1" wget -q -O /dev/null "http://127.0.0.1$2" 2>/dev/null
+}
+probe_path() {
+  case "$1" in
+    homepage) echo "/healthz" ;;
+    *)        echo "/api/readyz" ;;
+  esac
 }
 
-for tier in web learner writer; do
-  step "Waiting for the app to respond (via ${tier})"
+for tier in web learner writer homepage; do
+  path="$(probe_path "$tier")"
+  step "Waiting for the app to respond (via ${tier} ${path})"
   deadline=$((SECONDS + 90))
-  until probe "$tier"; do
+  until probe "$tier" "$path"; do
     if (( SECONDS >= deadline )); then
       echo >&2
       echo -e "${RED}Recent api logs:${NC}" >&2

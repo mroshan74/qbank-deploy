@@ -2,12 +2,13 @@
 #
 # Deploy one service to a specific, immutable image tag.
 #
-#   ./scripts/deploy.sh <api|web|learner|writer> <tag>
+#   ./scripts/deploy.sh <api|web|learner|writer|homepage> <tag>
 #
-#     api      NestJS backend         (qbank-api)
-#     web      staff back office      (qbank-admin)
-#     learner  learner-facing app     (qbank-learner)
-#     writer   question writer portal (qbank-writer)
+#     api       NestJS backend         (qbank-api)
+#     web       staff back office      (qbank-admin)
+#     learner   learner-facing app     (qbank-learner)
+#     writer    question writer portal (qbank-writer)
+#     homepage  marketing site         (qbank-homepage, static)
 #
 # Invoked over SSH by GitHub Actions, and by hand for rollbacks. Safe to run
 # repeatedly; deploying the tag that is already live is a no-op restart.
@@ -40,10 +41,10 @@ LOCK_FILE="$DEPLOY_DIR/.deploy.lock"
 SERVICE="${1:-}"
 TAG="${2:-}"
 
-[[ -n "$SERVICE" && -n "$TAG" ]] || fail "Usage: $0 <api|web|learner|writer> <tag>"
+[[ -n "$SERVICE" && -n "$TAG" ]] || fail "Usage: $0 <api|web|learner|writer|homepage> <tag>"
 case "$SERVICE" in
-  api|web|learner|writer) ;;
-  *) fail "Unknown service '$SERVICE' (expected 'api', 'web', 'learner', or 'writer')." ;;
+  api|web|learner|writer|homepage) ;;
+  *) fail "Unknown service '$SERVICE' (expected 'api', 'web', 'learner', 'writer', or 'homepage')." ;;
 esac
 
 # One deploy at a time. Two pushes in quick succession would otherwise
@@ -103,10 +104,11 @@ ok "All $(env_keys "$ENV_TEMPLATE" | wc -l | tr -d ' ') expected keys present"
 
 # ── 3. Record the tag (this is the rollback trail) ─────────────────────────
 case "$SERVICE" in
-  api)     TAG_VAR=API_TAG ;;
-  web)     TAG_VAR=WEB_TAG ;;
-  learner) TAG_VAR=LEARNER_TAG ;;
-  writer)  TAG_VAR=WRITER_TAG ;;
+  api)      TAG_VAR=API_TAG ;;
+  web)      TAG_VAR=WEB_TAG ;;
+  learner)  TAG_VAR=LEARNER_TAG ;;
+  writer)   TAG_VAR=WRITER_TAG ;;
+  homepage) TAG_VAR=HOMEPAGE_TAG ;;
 esac
 PREVIOUS_TAG="$(sed -n "s/^${TAG_VAR}=//p" "$ENV_FILE" | head -1)"
 
@@ -138,13 +140,15 @@ docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --no-deps "$SERVICE"
 # ── 5. Verify. A container that started is not a deploy that worked. ───────
 # Probe through the nginx of the tier just deployed, so a learner or writer
 # deploy is proved through that tier's own proxy rather than the admin's. An
-# api deploy is still proved through `web`, unchanged.
+# api deploy is still proved through `web`, unchanged. The homepage is a static
+# site with no /api proxy, so it is proved at its own /healthz instead.
 case "$SERVICE" in
-  learner|writer) PROBE_SERVICE="$SERVICE" ;;
-  *)              PROBE_SERVICE=web ;;
+  learner|writer) PROBE_SERVICE="$SERVICE"; PROBE_PATH="/api/readyz" ;;
+  homepage)       PROBE_SERVICE="$SERVICE"; PROBE_PATH="/healthz" ;;
+  *)              PROBE_SERVICE=web;        PROBE_PATH="/api/readyz" ;;
 esac
 
-step "Waiting for the app to respond (via ${PROBE_SERVICE})"
+step "Waiting for the app to respond (via ${PROBE_SERVICE} ${PROBE_PATH})"
 probe() {
   # Checked from inside a web container, which exercises the real path a
   # browser takes: nginx -> (proxy) -> api.
@@ -154,7 +158,7 @@ probe() {
   # binds IPv4 only — so the localhost form is refused on every attempt and
   # this loop could only ever time out.
   docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" \
-    exec -T "$PROBE_SERVICE" wget -q -O /dev/null "http://127.0.0.1/api/readyz" 2>/dev/null
+    exec -T "$PROBE_SERVICE" wget -q -O /dev/null "http://127.0.0.1${PROBE_PATH}" 2>/dev/null
 }
 
 deadline=$((SECONDS + 60))
