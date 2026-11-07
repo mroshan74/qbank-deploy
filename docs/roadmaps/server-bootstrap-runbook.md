@@ -108,7 +108,7 @@ what the local prod-parity stack already does.
 - [ ] An immediate **second** run exits 0 and reports superadmin "nothing to do",
       taxonomy "already seeded, skipped", and `created: 0 / changed: 0` for content.
       The version count stays at 1.
-- [x] `docker compose -f compose.prod.yml -p psc-archiver config` parses with the new
+- [x] `docker compose -f compose.prod.yml -p qbank config` parses with the new
       service, on `traefik_proxy`, with `traefik.enable=false`.
 - [ ] Admin at `:8080` and learner at `:8081` both serve; the superadmin signs in and
       is prompted to change the password; the taxonomy screen shows subjects.

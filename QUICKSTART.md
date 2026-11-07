@@ -14,7 +14,7 @@ Every step is safe to re-run.
 No commands. Confirm these are true before pasting anything:
 
 - [ ] The box is provisioned and Docker works for your account: [INSTRUCTION.md](INSTRUCTION.md) steps 1-3, verified with `docker info`.
-- [ ] `scripts/setup-app.sh` has been run once, so `/opt/psc-archiver` exists, holds this repo, and has a filled-in `.env`.
+- [ ] `scripts/setup-app.sh` has been run once, so `/opt/qbank` exists, holds this repo, and has a filled-in `.env`.
 - [ ] `docker login ghcr.io` has been done once on this account (the three GHCR packages are private).
 - [ ] Both DNS A records (`ADMIN_HOST`, `LEARNER_HOST`) resolve to this server.
 - [ ] `API_TAG`, `WEB_TAG` and `LEARNER_TAG` in `.env` name **published** tags.
@@ -30,7 +30,7 @@ Owns the shared `traefik_proxy` network, so it goes first. Already running from 
 previous round? Skip it, this stack is not torn down between rounds.
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 ACME_EMAIL=you@example.com docker compose -f compose.traefik.yml -p traefik up -d
 ```
 
@@ -45,14 +45,14 @@ api *through* a web container, so on a stack where nothing is running yet a
 single-service deploy always times out.
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver up -d
+docker compose -f compose.prod.yml -p qbank up -d
 ```
 
-Expect: `qbank-api`, `qbank-admin` and `psc-archiver-learner` started.
+Expect: `qbank-api`, `qbank-admin` and `qbank-learner` started.
 Give the api ~30s, then:
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver ps
+docker compose -f compose.prod.yml -p qbank ps
 ```
 
 Expect: `api` reaches `(healthy)`. Do not seed before it does.
@@ -66,7 +66,7 @@ their 14,868 questions. It runs inside the api image and talks to `api:5000` ove
 the internal network, so **you never sign in or call the API yourself**.
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed
+docker compose -f compose.prod.yml -p qbank --profile seed run --rm seed
 ```
 
 Expect, on an empty database:
@@ -108,11 +108,11 @@ Both are one-off, passed inline. Neither belongs in `.env`.
 ```bash
 # add a taxonomy version even though the database already has one
 # (also the fix for "Activate the matching bundled taxonomy")
-docker compose -f compose.prod.yml -p psc-archiver --profile seed \
+docker compose -f compose.prod.yml -p qbank --profile seed \
   run --rm -e SEED_TAXONOMY_FORCE=1 seed
 
 # import content even though the check found questions the seed files do not list
-docker compose -f compose.prod.yml -p psc-archiver --profile seed \
+docker compose -f compose.prod.yml -p qbank --profile seed \
   run --rm -e SEED_FORCE=1 seed
 ```
 
@@ -127,8 +127,8 @@ the database and start from step 3 instead.
 
 ```bash
 # both nginx tiers reach the api through their own /api proxy
-docker compose -f compose.prod.yml -p psc-archiver exec -T web     wget -q -O- http://127.0.0.1/api/readyz
-docker compose -f compose.prod.yml -p psc-archiver exec -T learner wget -q -O- http://127.0.0.1/api/readyz
+docker compose -f compose.prod.yml -p qbank exec -T web     wget -q -O- http://127.0.0.1/api/readyz
+docker compose -f compose.prod.yml -p qbank exec -T learner wget -q -O- http://127.0.0.1/api/readyz
 ```
 
 Expect: `{"status":"ok","database":"connected","buildId":"..."}` from each.
@@ -136,12 +136,12 @@ Expect: `{"status":"ok","database":"connected","buildId":"..."}` from each.
 ```bash
 # the PDF faces, including the one with spaces in its name
 for svc in web learner; do
-  docker compose -f compose.prod.yml -p psc-archiver exec -T $svc \
+  docker compose -f compose.prod.yml -p qbank exec -T $svc \
     wget -S -q -O /dev/null "http://127.0.0.1/fonts/Century%20Schoolbook%20Std%20Regular.otf"
 done
 
 # a missing face must 404, never 200 with index.html
-docker compose -f compose.prod.yml -p psc-archiver exec -T web \
+docker compose -f compose.prod.yml -p qbank exec -T web \
   wget -S -q -O /dev/null "http://127.0.0.1/fonts/no-such-face.otf"
 ```
 
@@ -159,8 +159,8 @@ Then in a browser:
 Read-only report of published papers with no questions and stale question counts, run inside the api container so it uses that container's `MONGODB_URI`. Exit `0` means clean. `--apply` moves empty published papers back to draft and refreshes the counts. Details: `qbank-api/src/scripts/audit-paper-lifecycle.ts`.
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts/audit-paper-lifecycle.js
-docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts/audit-paper-lifecycle.js --apply
+docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/audit-paper-lifecycle.js
+docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/audit-paper-lifecycle.js --apply
 ```
 
 ### Question bank backfill (once, when the decision 0042 build first goes out, and required)
@@ -168,8 +168,8 @@ docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts
 Every question needs a `bank` (`pyq` or `external`) before the admin app can list it: each Question Bank page now asks for one bank, and a row from before the field matches neither, so an unbackfilled database shows **empty** Questions, My Questions and Review pages. Run it right after the new api image is up, inside the api container so it uses that container's `MONGODB_URI`. The first form only reports; `--apply` writes. It is safe to re-run, and rows the new build creates are stamped on write. Details: `qbank-api/src/scripts/backfill-question-banks.ts`.
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts/backfill-question-banks.js
-docker compose -f compose.prod.yml -p psc-archiver exec -T api node dist/scripts/backfill-question-banks.js --apply
+docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/backfill-question-banks.js
+docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/backfill-question-banks.js --apply
 ```
 
 ### Question source type migration (once, before the decision 0045 build serves traffic, and required)
@@ -179,9 +179,9 @@ The decision 0045 build accepts only three source types (`exam_paper`, `current_
 Run it **from the new image before restarting the api**: pull, run it in a one-off container (the running api keeps serving, and it already accepts `custom`), then restart as in §5. The first form only reports; `--apply` writes. It is safe to re-run. Details: `qbank-api/src/scripts/migrate-question-source-types.ts`.
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver pull api
-docker compose -f compose.prod.yml -p psc-archiver run --rm --no-deps api node dist/scripts/migrate-question-source-types.js
-docker compose -f compose.prod.yml -p psc-archiver run --rm --no-deps api node dist/scripts/migrate-question-source-types.js --apply
+docker compose -f compose.prod.yml -p qbank pull api
+docker compose -f compose.prod.yml -p qbank run --rm --no-deps api node dist/scripts/migrate-question-source-types.js
+docker compose -f compose.prod.yml -p qbank run --rm --no-deps api node dist/scripts/migrate-question-source-types.js --apply
 ```
 
 ### The decision 0046 build (7th level)
@@ -199,7 +199,7 @@ stack at `latest` and pulling is enough to pick up whatever was last built.
 **One command does the whole thing:**
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 ./scripts/deploy-latest.sh
 ```
 
@@ -228,7 +228,7 @@ a refresh and a CI deploy cannot interleave.
 If you would rather not use the script, or want to see what it does:
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 
 # 1. point every service at the newest published image, and stamp a fresh
 #    BUILD_ID so old sessions are retired the way a real deploy retires them
@@ -236,13 +236,13 @@ sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_T
 sed -i "s/^BUILD_ID=.*/BUILD_ID=$(date +%y%m%d%H%M)-latest/" .env
 
 # 2. stop all app services
-docker compose -f compose.prod.yml -p psc-archiver down
+docker compose -f compose.prod.yml -p qbank down
 
 # 3. pull the newest images
-docker compose -f compose.prod.yml -p psc-archiver pull
+docker compose -f compose.prod.yml -p qbank pull
 
 # 4. start everything again
-docker compose -f compose.prod.yml -p psc-archiver up -d
+docker compose -f compose.prod.yml -p qbank up -d
 ```
 
 Step 1 only has to be run **once**; after that `.env` already says `latest` and
@@ -252,7 +252,7 @@ sessions minted by the previous build, which a pinned-tag deploy gets for free.
 Once the stack is up, re-run the seed if the database was cleared:
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed
+docker compose -f compose.prod.yml -p qbank --profile seed run --rm seed
 ```
 
 > **Never add `-v` to that `down`.** It would delete the `ai_tagging_jobs`
@@ -263,7 +263,7 @@ docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed
 > **`latest` is a testing convenience, not the deployment model.** While the tags
 > say `latest` you cannot roll back, because `rollback.sh` works by redeploying a
 > pinned tag and there is no record here of which build you are on. `docker
-> compose -f compose.prod.yml -p psc-archiver images` shows the image IDs you are
+> compose -f compose.prod.yml -p qbank images` shows the image IDs you are
 > actually running. When the pipelines land, go back to pinned short-SHA tags,
 > which is what `deploy.sh` writes.
 
@@ -274,7 +274,7 @@ docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed
 CI then does all of the above on every push, and by hand it becomes:
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 ./scripts/deploy.sh api     <sha>
 ./scripts/deploy.sh web     <sha>   # staff back office
 ./scripts/deploy.sh learner <sha>   # learner app
@@ -314,12 +314,50 @@ code is printed in `docker compose -f compose.local.yml logs api`.
 | Symptom | Cause |
 |---|---|
 | `network traefik_proxy declared as external, but could not be found` | Step 1 was skipped |
-| Seed stops at `API did not become ready` | The api container is not up, or is unhealthy. `docker compose -f compose.prod.yml -p psc-archiver logs api` |
+| Seed stops at `API did not become ready` | The api container is not up, or is unhealthy. `docker compose -f compose.prod.yml -p qbank logs api` |
 | Seed stops at `Login failed (401)` | `SEED_SUPERADMIN_USERNAME` / `SEED_SUPERADMIN_PASSWORD` in `.env` do not match the account already in the database |
 | `Refusing to import: N questions ... are not in the seed files` | The database is not empty and predates `_id` matching. Clear it and re-run step 3 |
 | `unauthorized` / `denied` pulling an image | No GHCR login on this account, or a fine-grained PAT instead of a classic one with `read:packages` |
 | `manifest unknown` pulling `:latest` | That repo's workflow has never completed a build, so no `:latest` exists yet. Push once, or set that one tag back to a short SHA that does exist |
-| A refresh pulled nothing and the app looks unchanged | `:latest` has not moved since the last pull. Confirm the build actually ran, then compare `docker compose -f compose.prod.yml -p psc-archiver images` before and after |
+| A refresh pulled nothing and the app looks unchanged | `:latest` has not moved since the last pull. Confirm the build actually ran, then compare `docker compose -f compose.prod.yml -p qbank images` before and after |
 | Certificate not issued | DNS does not resolve yet. `dig +short <ADMIN_HOST>`, then `docker logs traefik` |
 
 Longer list, with the reasoning: [README.md → Troubleshooting](README.md#troubleshooting).
+
+## One-time: moving the server from `psc-archiver` to `qbank`
+
+Done once, when the rename roadmap's Phase 3 runs (`docs/roadmaps/rename-to-qbank.md`
+in the workspace root). Delete this section afterwards. Order matters: the app
+images land on GHCR first, then the server moves, then the stack starts from
+those images.
+
+```bash
+# 1. Push qbank-deploy, then qbank-api, qbank-admin and qbank-learner. Their
+#    CI builds ghcr.io/mroshan74/qbank-*:<sha> and :latest; the deploy step
+#    fails because /opt/qbank does not exist yet. Expected.
+
+# 2. On the server, with no AI-tagging job in flight:
+cd /opt/psc-archiver
+docker compose -f compose.prod.yml -p psc-archiver down
+cd /opt && sudo mv psc-archiver qbank && cd qbank
+git remote set-url origin https://github.com/mroshan74/qbank-deploy.git
+git pull --ff-only
+# .env: API_IMAGE, WEB_IMAGE, LEARNER_IMAGE -> the qbank-* names
+sed -i 's|psc-archiver-api|qbank-api|; s|psc-archiver-web|qbank-admin|; s|psc-archiver-client|qbank-learner|' .env
+# .env: MONGODB_URI, change the database name (the path segment) to qbank by hand.
+# The seed below recreates the System organization and the superadmin from
+# SEED_SUPERADMIN_* on that empty database.
+nano .env
+
+# 3. Start everything from :latest and seed:
+./scripts/deploy-latest.sh --seed
+
+# 4. Pin the tags: run each app's "Build, Push & Deploy" workflow by hand with
+#    the <sha> from step 1 as the tag, or on the server:
+./scripts/deploy.sh api <sha>; ./scripts/deploy.sh web <sha>; ./scripts/deploy.sh learner <sha>
+
+# 5. Clean up, once both hosts answer:
+docker volume rm psc-archiver-ai-tagging-jobs
+# drop the pscarchiver database in Atlas; after a week, delete the old
+# psc-archiver-* packages on GHCR.
+```

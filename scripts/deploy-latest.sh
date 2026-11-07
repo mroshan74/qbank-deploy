@@ -31,7 +31,7 @@ fail()  { echo -e "${RED}✗ $*${NC}" >&2; exit 1; }
 
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$DEPLOY_DIR/compose.prod.yml"
-PROJECT_NAME="psc-archiver"
+PROJECT_NAME="qbank"
 ENV_FILE="$DEPLOY_DIR/.env"
 ENV_TEMPLATE="$DEPLOY_DIR/.env.example"
 # The SAME lock deploy.sh takes. A separate file would let a refresh and a CI
@@ -190,7 +190,7 @@ docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" images
 if (( ! DO_SEED )); then
   echo
   echo -e "  Seed a fresh database with:"
-  echo -e "    docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed"
+  echo -e "    docker compose -f compose.prod.yml -p qbank --profile seed run --rm seed"
   echo -e "  or re-run this with --seed."
 fi
 if [[ "$TAG" == "latest" ]]; then

@@ -27,8 +27,8 @@
 # that in the printed steps for later.
 #
 # Afterwards you still have to, by hand — the script prints these and saves them
-# to /opt/psc-archiver/REMAINING-STEPS.txt:
-#   1. fill in /opt/psc-archiver/.env      (copied from .env.example)
+# to /opt/qbank/REMAINING-STEPS.txt:
+#   1. fill in /opt/qbank/.env      (copied from .env.example)
 #   2. set the VPS_USER / VPS_HOST / VPS_SSH_KEY GitHub secrets, in all three
 #      app repos
 #   3. point ADMIN_HOST's and LEARNER_HOST's DNS A records at this server
@@ -43,7 +43,7 @@ ok()   { echo -e "${GREEN}✓ $*${NC}"; }
 note() { echo -e "${YELLOW}$*${NC}"; }
 fail() { echo -e "${RED}✗ $*${NC}" >&2; exit 1; }
 
-APP_DIR="${APP_DIR:-/opt/psc-archiver}"
+APP_DIR="${APP_DIR:-/opt/qbank}"
 REPO_URL="${REPO_URL:-https://github.com/mroshan74/qbank-deploy.git}"
 RUN_AS="$(id -un)"
 
@@ -251,7 +251,7 @@ $GHCR_STEP
      container already running, which isn't true yet. Bring them all up
      together once instead (after setting real API_TAG/WEB_TAG/LEARNER_TAG
      in .env):
-       docker compose -f compose.prod.yml -p psc-archiver up -d
+       docker compose -f compose.prod.yml -p qbank up -d
      Every deploy after this one — from CI or by hand — can safely use:
        ./scripts/deploy.sh api <tag>
        ./scripts/deploy.sh web <tag>       # staff back office
@@ -262,7 +262,7 @@ $GHCR_STEP
      taxonomy and imports the bundled exam papers and questions. It runs inside
      the api image and talks to api:5000 over the internal network, so you never
      sign in or call the API yourself. Idempotent, safe to re-run:
-       docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed
+       docker compose -f compose.prod.yml -p qbank --profile seed run --rm seed
      Set SEED_SUPERADMIN_USERNAME and SEED_SUPERADMIN_PASSWORD in .env first.
 
 Steps 4, 6 and 7 are the ones you repeat every time the app is torn down and

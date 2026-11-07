@@ -1,4 +1,4 @@
-# Production stack. Deployed to /opt/psc-archiver on the VPS and driven by
+# Production stack. Deployed to /opt/qbank on the VPS and driven by
 # scripts/deploy.sh — do not run `docker compose` here by hand except to
 # inspect state.
 #
@@ -9,17 +9,17 @@
 # there is no CORS in production — but there are now two certificates, and both
 # hostnames must resolve to this server before their first deploy.
 
-# docker compose -f compose.prod.yml -p psc-archiver up -d
+# docker compose -f compose.prod.yml -p qbank up -d
 
 
-name: psc-archiver
+name: qbank
 
 services:
   api:
     # Resolved from .env, which deploy.sh rewrites on every deploy. Never
     # `:latest` — pinning the tag is what makes rollback a one-liner.
     image: ${API_IMAGE:-ghcr.io/mroshan74/qbank-api}:${API_TAG:?API_TAG is not set in .env}
-    container_name: psc-archiver-api
+    container_name: qbank-api
     restart: unless-stopped
     env_file:
       - .env
@@ -53,7 +53,7 @@ services:
 
   web:
     image: ${WEB_IMAGE:-ghcr.io/mroshan74/qbank-admin}:${WEB_TAG:?WEB_TAG is not set in .env}
-    container_name: psc-archiver-web
+    container_name: qbank-admin
     restart: unless-stopped
     depends_on:
       - api
@@ -86,7 +86,7 @@ services:
   # second hostname rather than a path prefix on the first.
   learner:
     image: ${LEARNER_IMAGE:-ghcr.io/mroshan74/qbank-learner}:${LEARNER_TAG:?LEARNER_TAG is not set in .env}
-    container_name: psc-archiver-learner
+    container_name: qbank-learner
     restart: unless-stopped
     depends_on:
       - api
@@ -117,7 +117,7 @@ services:
   # One-shot bootstrap for a fresh database, the production twin of the `seed`
   # service in compose.local.yml. Run it after the stack is up:
   #
-  #   docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed
+  #   docker compose -f compose.prod.yml -p qbank --profile seed run --rm seed
   #
   # It creates the System organization and the superadmin (straight to MongoDB),
   # waits for the api, then seeds the taxonomy and imports the bundled exam
@@ -155,7 +155,7 @@ services:
 
 volumes:
   ai_tagging_jobs:
-    name: psc-archiver-ai-tagging-jobs
+    name: qbank-ai-tagging-jobs
 
 networks:
   # Created and owned by the Traefik stack (compose.traefik.yml), which must

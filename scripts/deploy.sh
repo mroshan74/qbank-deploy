@@ -26,7 +26,7 @@ fail()  { echo -e "${RED}✗ $*${NC}" >&2; exit 1; }
 
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$DEPLOY_DIR/compose.prod.yml"
-PROJECT_NAME="psc-archiver"
+PROJECT_NAME="qbank"
 ENV_FILE="$DEPLOY_DIR/.env"
 ENV_TEMPLATE="$DEPLOY_DIR/.env.example"
 # One shared lock for every account that can deploy. A per-user filename would

@@ -100,9 +100,9 @@ Run it **as the account CI will connect as**:
 curl -fsSL https://raw.githubusercontent.com/mroshan74/qbank-deploy/main/scripts/setup-app.sh | bash
 ```
 
-It checks its prerequisites, clones this repo to `/opt/psc-archiver`, creates
+It checks its prerequisites, clones this repo to `/opt/qbank`, creates
 `.env` from the template, and prints the remaining manual steps (also saved to
-`/opt/psc-archiver/REMAINING-STEPS.txt`). Safe to re-run.
+`/opt/qbank/REMAINING-STEPS.txt`). Safe to re-run.
 
 Full details: [README.md → Set up the application](README.md#set-up-the-application).
 

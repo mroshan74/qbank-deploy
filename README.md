@@ -21,7 +21,7 @@ Fill these in — the checked-in files use placeholders.
 
 | Placeholder | Where | What to put |
 |---|---|---|
-| `ADMIN_HOST` | `/opt/psc-archiver/.env` | Staff back-office hostname, e.g. `archiver.trynbuild.com` |
+| `ADMIN_HOST` | `/opt/qbank/.env` | Staff back-office hostname, e.g. `archiver.trynbuild.com` |
 | `LEARNER_HOST` | `.env` | Learner-app hostname, e.g. `learner.trynbuild.com` |
 | `CLIENT_URL` | `.env` | The API's CORS allow-list. Must name **both** origins, comma-separated |
 | `ACME_EMAIL` | passed to `compose.traefik.yml` | Where Let's Encrypt sends expiry warnings |
@@ -277,7 +277,7 @@ The following must already be true before the application can be set up:
 | Docker Engine + the Compose plugin | `setup-app.sh` verifies, never installs |
 | An account to SSH in as, able to reach the Docker socket (typically via the `docker` group), that the developer doing setup can log in to | never created here. A dedicated service account is preferred; `root` works |
 | The CI public key installed on that account's `authorized_keys` | needed before the first CI *deploy*, not before setup. Never written here — you generate the keypair (below) and hand over the public half |
-| `/opt/psc-archiver`, owned by that account | the one thing `setup-app.sh` offers to do itself — it prints the `sudo install -d` and waits for a `y` before running it. Answer `n` and it stops, unchanged |
+| `/opt/qbank`, owned by that account | the one thing `setup-app.sh` offers to do itself — it prints the `sudo install -d` and waits for a `y` before running it. Answer `n` and it stops, unchanged |
 | Inbound 80 and 443 reachable, and SSH reachable from GitHub Actions | never changed here |
 
 ---
@@ -295,14 +295,14 @@ curl -fsSL https://raw.githubusercontent.com/mroshan74/qbank-deploy/main/scripts
 
 **Whichever account you SSH in as is the account CI must use.** The script
 checks *that* account — not a hardcoded one — for Docker access and write
-access to `/opt/psc-archiver`, and prints it at the end as the value for the
+access to `/opt/qbank`, and prints it at the end as the value for the
 `VPS_USER` secret. Setting up as one account while CI connects as another is
 the classic failure: `deploy.sh`'s `git pull` and its `sed -i` on `.env` both
 need to write there, and fail with "permission denied" otherwise.
 
-It then clones this repo to `/opt/psc-archiver` and creates `.env` from the
+It then clones this repo to `/opt/qbank` and creates `.env` from the
 template. It prints the remaining manual steps when it finishes, and also
-saves them to `/opt/psc-archiver/REMAINING-STEPS.txt` in case your session
+saves them to `/opt/qbank/REMAINING-STEPS.txt` in case your session
 drops before you're done — `cat` that file anytime, or just re-run the script;
 it's idempotent and safe to repeat.
 
@@ -311,7 +311,7 @@ running anything:
 
 | Prompt | If you answer `y` | If you answer `n` |
 |---|---|---|
-| Create (or hand over) `/opt/psc-archiver` — the one privileged command | runs that single `sudo` and continues | stops immediately, server unchanged, and prints the command to pass to whoever administers it |
+| Create (or hand over) `/opt/qbank` — the one privileged command | runs that single `sudo` and continues | stops immediately, server unchanged, and prints the command to pass to whoever administers it |
 | Log in to ghcr.io | asks for your GitHub username and PAT (input hidden, piped straight to `--password-stdin` — never echoed, never a shell argument, never written anywhere but Docker's own config) | carries on; it stays in the printed steps for later |
 
 It skips the second prompt entirely if credentials for `ghcr.io` are already
@@ -381,7 +381,7 @@ the `setup-app.sh` bootstrap URL both track.)
 By hand, on the server:
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 ./scripts/deploy.sh api a1b2c3d
 ./scripts/deploy.sh web a1b2c3d       # staff back office
 ./scripts/deploy.sh learner a1b2c3d   # learner-facing app
@@ -398,7 +398,7 @@ once, instead (after `API_TAG` / `WEB_TAG` / `LEARNER_TAG` in `.env` point at
 real published tags):
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver up -d
+docker compose -f compose.prod.yml -p qbank up -d
 ```
 
 Every deploy after that — from CI or by hand — can go through `deploy.sh`
@@ -449,7 +449,7 @@ alongside the immutable `:<short-sha>` tag, so this picks up whatever was last
 built without anyone having to look a SHA up.
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 ./scripts/deploy-latest.sh          # stop, pull, start, verify
 ./scripts/deploy-latest.sh --seed   # ...and seed a freshly cleared database
 ```
@@ -480,16 +480,16 @@ Where it differs from `deploy.sh`, and why both exist:
 Doing it without the script, which is all the script does:
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 
 # once: point every service at the newest published image
 sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_TAG=.*/LEARNER_TAG=latest/' .env
 
 # each refresh: stamp a fresh BUILD_ID, stop, pull, start
 sed -i "s/^BUILD_ID=.*/BUILD_ID=$(date +%y%m%d%H%M)-latest/" .env
-docker compose -f compose.prod.yml -p psc-archiver down
-docker compose -f compose.prod.yml -p psc-archiver pull
-docker compose -f compose.prod.yml -p psc-archiver up -d
+docker compose -f compose.prod.yml -p qbank down
+docker compose -f compose.prod.yml -p qbank pull
+docker compose -f compose.prod.yml -p qbank up -d
 ```
 
 **Re-stamping `BUILD_ID` is not cosmetic.** It is what retires sessions minted by
@@ -506,7 +506,7 @@ stale.
 
 > ⚠ **`latest` trades away rollback.** `rollback.sh` works by redeploying a
 > pinned tag, and while `.env` says `latest` there is no record of which build is
-> live — `docker compose -f compose.prod.yml -p psc-archiver images` gives you the
+> live — `docker compose -f compose.prod.yml -p qbank images` gives you the
 > image IDs and nothing more. This is a deliberate convenience for MVP test runs.
 > When the pipelines land, go back to pinned short-SHA tags, which is exactly what
 > `deploy.sh` writes and why `compose.prod.yml` says never `:latest`.
@@ -516,7 +516,7 @@ Paste-ready version, with the seed step: [QUICKSTART.md](QUICKSTART.md#5-pull-th
 ### Container health
 
 All three services carry a Docker healthcheck, so `docker compose -f
-compose.prod.yml -p psc-archiver ps` reports real status rather than just "Up":
+compose.prod.yml -p qbank ps` reports real status rather than just "Up":
 
 | Service | Probe | Means |
 |---------|-------|-------|
@@ -534,7 +534,7 @@ Every build is published under its own immutable short-SHA tag, and
 deploy of an older tag:
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 ./scripts/rollback.sh api                   # list tags available on this host
 ./scripts/rollback.sh api 9f8e7d6           # go back to that build
 ./scripts/rollback.sh learner 9f8e7d6       # same, for the learner app
@@ -562,7 +562,7 @@ is actually a rollback:
 
 ```bash
 ssh <VPS_USER>@<vps>
-cd /opt/psc-archiver
+cd /opt/qbank
 nano .env                                  # edit the value
 ./scripts/deploy.sh api "$(sed -n 's/^API_TAG=//p' .env)"   # redeploy the same tag
 ```
@@ -576,8 +576,8 @@ database is seeded from scratch. **One command does all of it**, and it is the
 same script and the same profile the local stack uses:
 
 ```bash
-cd /opt/psc-archiver
-docker compose -f compose.prod.yml -p psc-archiver --profile seed run --rm seed
+cd /opt/qbank
+docker compose -f compose.prod.yml -p qbank --profile seed run --rm seed
 ```
 
 Four steps, in this order, because each depends on the one before:
@@ -630,7 +630,7 @@ The individual steps are still available if you need one on its own — for
 example, repairing a superadmin whose organization link is wrong:
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver run --rm \
+docker compose -f compose.prod.yml -p qbank run --rm \
   api node dist/scripts/seed-superadmin.js
 ```
 
@@ -656,7 +656,7 @@ Fix: generate a **classic** PAT (not fine-grained) at
 github.com/settings/tokens with `read:packages` checked, and log in again.
 
 **Deploy failed at "Checking environment".** The output lists the missing keys.
-Add them to `/opt/psc-archiver/.env`. Nothing was changed — the running stack is
+Add them to `/opt/qbank/.env`. Nothing was changed — the running stack is
 untouched.
 
 **Deploy failed at "Waiting for the app to respond".** The new image is running
@@ -685,7 +685,7 @@ remediation.
 
 **The API container restarts in a loop.** Almost always a missing or malformed
 env var — the app deliberately refuses to boot without `MONGODB_URI` and
-`JWT_SECRET`. Check `docker compose -f compose.prod.yml -p psc-archiver logs api`.
+`JWT_SECRET`. Check `docker compose -f compose.prod.yml -p qbank logs api`.
 
 **502 on `/api` while the api container is healthy.** Applies to both `web` and
 `learner`. Their nginx resolves the api by name through Docker's embedded DNS
@@ -702,10 +702,10 @@ change; redeploy that service to pick it up.
 so the `localhost` form is refused every time regardless of app state.
 
 ```bash
-docker compose -f compose.prod.yml -p psc-archiver exec -T web \
+docker compose -f compose.prod.yml -p qbank exec -T web \
   wget -q -O- http://127.0.0.1/api/readyz
 
-docker compose -f compose.prod.yml -p psc-archiver exec -T learner \
+docker compose -f compose.prod.yml -p qbank exec -T learner \
   wget -q -O- http://127.0.0.1/api/readyz
 ```
 
@@ -716,7 +716,7 @@ export. There are **six** files, and two carry spaces in the filename, requested
 
 ```bash
 for svc in web learner; do
-  docker compose -f compose.prod.yml -p psc-archiver exec -T $svc \
+  docker compose -f compose.prod.yml -p qbank exec -T $svc \
     wget -S -q -O /dev/null "http://127.0.0.1/fonts/Century%20Schoolbook%20Std%20Regular.otf"
 done
 ```
@@ -733,7 +733,7 @@ present under that exact name.
 > cause. Both images now answer `404`:
 >
 > ```bash
-> docker compose -f compose.prod.yml -p psc-archiver exec -T web \
+> docker compose -f compose.prod.yml -p qbank exec -T web \
 >   wget -S -q -O /dev/null "http://127.0.0.1/fonts/no-such-face.otf"   # must be 404
 > ```
 >
@@ -773,10 +773,10 @@ the order worth checking:
    service carries an explicit `networks: [traefik_proxy]`. Without it the
    container starts perfectly well, cannot resolve the name `api`, and fails 90
    seconds later with a message that reads like an API fault. Confirm with
-   `docker compose -f compose.prod.yml -p psc-archiver --profile seed config`
+   `docker compose -f compose.prod.yml -p qbank --profile seed config`
    and look for `traefik_proxy` under the `seed` service.
 2. **The api genuinely is not ready.** `docker compose -f compose.prod.yml -p
-   psc-archiver ps` should show it `(healthy)`; if not, read
+   qbank ps` should show it `(healthy)`; if not, read
    `logs api` — a missing `MONGODB_URI` or `JWT_SECRET` is the usual answer.
 
 A `Login failed (401)` immediately after is a different problem: the
@@ -784,7 +784,7 @@ A `Login failed (401)` immediately after is a different problem: the
 account already in the database. The seeded account is pinned to a fixed `_id`,
 so once it exists these two values no longer create it, they only sign in as it.
 
-**`Local changes present in /opt/psc-archiver — skipping git pull` on every
+**`Local changes present in /opt/qbank — skipping git pull` on every
 deploy, with `git status` showing nothing you edited.** Run `git diff` on the
 server: if the only hunks are `old mode 100644` / `new mode 100755` on
 `scripts/*.sh`, that is a file-mode diff, not a content one. It appears when the
@@ -798,7 +798,7 @@ to clear a server that is already in this state, drop the mode-only diff and
 pull once by hand:
 
 ```bash
-cd /opt/psc-archiver
+cd /opt/qbank
 git diff --stat          # confirm it is mode-only before discarding anything
 git checkout -- scripts/
 git pull --ff-only
@@ -810,8 +810,8 @@ hides the symptom while leaving the scripts non-executable for anyone who clones
 the repo fresh.
 
 **`permission denied` on `git pull` or `.env` during a deploy.** `VPS_USER`
-is not the account `/opt/psc-archiver` belongs to. Compare `ls -ld
-/opt/psc-archiver` with the `VPS_USER` secret; re-running `setup-app.sh` as
+is not the account `/opt/qbank` belongs to. Compare `ls -ld
+/opt/qbank` with the `VPS_USER` secret; re-running `setup-app.sh` as
 the intended account prints the value it should be.
 
 **Certificate is not issued.** Traefik needs the hostname's DNS record to
