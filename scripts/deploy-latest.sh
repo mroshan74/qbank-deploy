@@ -13,7 +13,7 @@
 #
 #   deploy.sh          one service, one pinned tag, --no-deps, keeps a rollback
 #                      trail in .env. What CI runs.
-#   deploy-latest.sh   all three services at once, floating tag, full restart.
+#   deploy-latest.sh   every service at once, floating tag, full restart.
 #                      No rollback trail: while .env says `latest` there is no
 #                      record of which build is live.
 #
@@ -106,10 +106,11 @@ set_key() {
 }
 
 PREVIOUS="$(sed -n 's/^API_TAG=//p' "$ENV_FILE" | head -1)"
-step "Setting API_TAG / WEB_TAG / LEARNER_TAG to '${TAG}' (api was ${PREVIOUS:-unset})"
+step "Setting API_TAG / WEB_TAG / LEARNER_TAG / WRITER_TAG to '${TAG}' (api was ${PREVIOUS:-unset})"
 set_key API_TAG "$TAG"
 set_key WEB_TAG "$TAG"
 set_key LEARNER_TAG "$TAG"
+set_key WRITER_TAG "$TAG"
 
 # The API stamps BUILD_ID into every token it issues, so changing it retires
 # sessions minted by the previous build. A floating tag never changes on its
@@ -141,8 +142,8 @@ docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull
 step "Starting all app services"
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d
 
-# ── 5. Verify through BOTH nginx tiers ─────────────────────────────────────
-# Everything restarted, so both proxies are worth proving rather than just one
+# ── 5. Verify through EVERY nginx tier ─────────────────────────────────────
+# Everything restarted, so every proxy is worth proving rather than just one
 # the way a single-service deploy does.
 probe() {
   # 127.0.0.1, NOT localhost: BusyBox wget tries ::1 first and nginx's
@@ -151,7 +152,7 @@ probe() {
     exec -T "$1" wget -q -O /dev/null "http://127.0.0.1/api/readyz" 2>/dev/null
 }
 
-for tier in web learner; do
+for tier in web learner writer; do
   step "Waiting for the app to respond (via ${tier})"
   deadline=$((SECONDS + 90))
   until probe "$tier"; do

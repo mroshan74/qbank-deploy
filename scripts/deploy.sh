@@ -2,11 +2,12 @@
 #
 # Deploy one service to a specific, immutable image tag.
 #
-#   ./scripts/deploy.sh <api|web|learner> <tag>
+#   ./scripts/deploy.sh <api|web|learner|writer> <tag>
 #
-#     api      NestJS backend      (qbank-api)
-#     web      staff back office   (qbank-admin)
-#     learner  learner-facing app  (qbank-learner)
+#     api      NestJS backend         (qbank-api)
+#     web      staff back office      (qbank-admin)
+#     learner  learner-facing app     (qbank-learner)
+#     writer   question writer portal (qbank-writer)
 #
 # Invoked over SSH by GitHub Actions, and by hand for rollbacks. Safe to run
 # repeatedly; deploying the tag that is already live is a no-op restart.
@@ -39,10 +40,10 @@ LOCK_FILE="$DEPLOY_DIR/.deploy.lock"
 SERVICE="${1:-}"
 TAG="${2:-}"
 
-[[ -n "$SERVICE" && -n "$TAG" ]] || fail "Usage: $0 <api|web|learner> <tag>"
+[[ -n "$SERVICE" && -n "$TAG" ]] || fail "Usage: $0 <api|web|learner|writer> <tag>"
 case "$SERVICE" in
-  api|web|learner) ;;
-  *) fail "Unknown service '$SERVICE' (expected 'api', 'web', or 'learner')." ;;
+  api|web|learner|writer) ;;
+  *) fail "Unknown service '$SERVICE' (expected 'api', 'web', 'learner', or 'writer')." ;;
 esac
 
 # One deploy at a time. Two pushes in quick succession would otherwise
@@ -105,6 +106,7 @@ case "$SERVICE" in
   api)     TAG_VAR=API_TAG ;;
   web)     TAG_VAR=WEB_TAG ;;
   learner) TAG_VAR=LEARNER_TAG ;;
+  writer)  TAG_VAR=WRITER_TAG ;;
 esac
 PREVIOUS_TAG="$(sed -n "s/^${TAG_VAR}=//p" "$ENV_FILE" | head -1)"
 
@@ -134,10 +136,13 @@ step "Starting ${SERVICE}"
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --no-deps "$SERVICE"
 
 # ── 5. Verify. A container that started is not a deploy that worked. ───────
-# Probe through the nginx of the tier just deployed, so a learner deploy is
-# proved through the learner's own proxy rather than the admin's. An api deploy
-# is still proved through `web`, unchanged.
-PROBE_SERVICE="$([[ "$SERVICE" == "learner" ]] && echo learner || echo web)"
+# Probe through the nginx of the tier just deployed, so a learner or writer
+# deploy is proved through that tier's own proxy rather than the admin's. An
+# api deploy is still proved through `web`, unchanged.
+case "$SERVICE" in
+  learner|writer) PROBE_SERVICE="$SERVICE" ;;
+  *)              PROBE_SERVICE=web ;;
+esac
 
 step "Waiting for the app to respond (via ${PROBE_SERVICE})"
 probe() {

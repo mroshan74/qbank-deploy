@@ -16,8 +16,8 @@ No commands. Confirm these are true before pasting anything:
 - [ ] The box is provisioned and Docker works for your account: [INSTRUCTION.md](INSTRUCTION.md) steps 1-3, verified with `docker info`.
 - [ ] `scripts/setup-app.sh` has been run once, so `/opt/qbank` exists, holds this repo, and has a filled-in `.env`.
 - [ ] `docker login ghcr.io` has been done once on this account (the three GHCR packages are private).
-- [ ] Both DNS A records (`ADMIN_HOST`, `LEARNER_HOST`) resolve to this server.
-- [ ] `API_TAG`, `WEB_TAG` and `LEARNER_TAG` in `.env` name **published** tags.
+- [ ] Every DNS A record (`ADMIN_HOST`, `LEARNER_HOST`, `WRITER_HOST`) resolves to this server.
+- [ ] `API_TAG`, `WEB_TAG`, `LEARNER_TAG` and `WRITER_TAG` in `.env` name **published** tags.
 - [ ] **The database is empty.** Production runs on MongoDB Atlas, so there is no container to wipe and `down -v` clears nothing. Clear it in Atlas yourself. Nothing in this repo deletes data.
 
 If any of those is not true, start from [README.md → Set up the application](README.md#set-up-the-application) instead.
@@ -129,6 +129,7 @@ the database and start from step 3 instead.
 # both nginx tiers reach the api through their own /api proxy
 docker compose -f compose.prod.yml -p qbank exec -T web     wget -q -O- http://127.0.0.1/api/readyz
 docker compose -f compose.prod.yml -p qbank exec -T learner wget -q -O- http://127.0.0.1/api/readyz
+docker compose -f compose.prod.yml -p qbank exec -T writer  wget -q -O- http://127.0.0.1/api/readyz
 ```
 
 Expect: `{"status":"ok","database":"connected","buildId":"..."}` from each.
@@ -153,6 +154,7 @@ Then in a browser:
 
 - `https://<ADMIN_HOST>` — sign in as the seeded superadmin, set a new password when prompted, confirm the taxonomy page shows subjects and the exam papers list shows 163.
 - `https://<LEARNER_HOST>` — sign in by mobile number, open a paper, download it, and confirm the Malayalam renders.
+- `https://<WRITER_HOST>` — create a `writer` account in the admin and assign it a draft exam paper; sign in with it, open the paper, add a question, and confirm the Malayalam renders. Also check the writer's Malayalam face: `docker compose -f compose.prod.yml -p qbank exec -T writer wget -S -q -O /dev/null http://127.0.0.1/fonts/MANDARAM.ttf` answers `200` with `font/ttf`.
 
 ### Paper lifecycle audit (once, when the decision 0040 build first goes out)
 
@@ -232,7 +234,7 @@ cd /opt/qbank
 
 # 1. point every service at the newest published image, and stamp a fresh
 #    BUILD_ID so old sessions are retired the way a real deploy retires them
-sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_TAG=.*/LEARNER_TAG=latest/' .env
+sed -i 's/^API_TAG=.*/API_TAG=latest/;s/^WEB_TAG=.*/WEB_TAG=latest/;s/^LEARNER_TAG=.*/LEARNER_TAG=latest/;s/^WRITER_TAG=.*/WRITER_TAG=latest/' .env
 sed -i "s/^BUILD_ID=.*/BUILD_ID=$(date +%y%m%d%H%M)-latest/" .env
 
 # 2. stop all app services
@@ -278,6 +280,7 @@ cd /opt/qbank
 ./scripts/deploy.sh api     <sha>
 ./scripts/deploy.sh web     <sha>   # staff back office
 ./scripts/deploy.sh learner <sha>   # learner app
+./scripts/deploy.sh writer  <sha>   # writer portal
 ```
 
 Roll back:
@@ -301,7 +304,45 @@ docker compose -f compose.local.yml up -d --build
 docker compose -f compose.local.yml --profile seed run --rm seed
 # → http://localhost:8080  (admin)
 # → http://localhost:8081  (learner)
+# → http://localhost:8082  (writer)
 ```
+
+---
+
+## Adding the writer portal to a running server
+
+Once, when `qbank-writer` first goes out. **The order matters**: this repo's
+`.env.example` names three new keys, `deploy.sh` checks the server's `.env`
+against it after pulling this repo, and a missing key stops **every** service's
+deploy, not just the writer's.
+
+1. **DNS:** point `WRITER_HOST` (e.g. `writer.trynbuild.com`) at this server and
+   let it propagate. Let's Encrypt cannot issue the certificate until it does.
+2. **`.env` first:** add the three keys, and the new origin to `CLIENT_URL`:
+   ```bash
+   cd /opt/qbank
+   cat >> .env <<'KEYS'
+   WRITER_HOST=writer.trynbuild.com
+   WRITER_TAG=latest
+   WRITER_IMAGE=ghcr.io/mroshan74/qbank-writer
+   KEYS
+   nano .env   # append ,https://writer.trynbuild.com to CLIENT_URL
+   ```
+3. **GitHub:** in `qbank-writer`'s repository settings set the four deploy secrets
+   (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_SSH_KEY_PASSPHRASE`), the same
+   values the other app repos use.
+4. **Push this repo** (the `writer` service, scripts and docs), then pull it here:
+   `git -C /opt/qbank pull --ff-only`.
+5. **First image:** push `qbank-writer` to `main`. CI lints, checks the env files
+   and the copy, builds, publishes `ghcr.io/mroshan74/qbank-writer` and runs
+   `deploy.sh writer <sha>`. Make the new GHCR package **private**, like the
+   others, so the server's stored login keeps working.
+6. **Verify:** §4's `writer` lines, then `https://<WRITER_HOST>` in a browser.
+7. **The API build with decision 0056** (the writer limits) must be live before
+   writers use the portal: deploy `qbank-api` first if it is not.
+
+Roll back the writer alone with `./scripts/rollback.sh writer <tag>`; nothing
+else restarts.
 
 Default account: `superadmin` / `ChangeMe123!`, override with
 `SEED_SUPERADMIN_USERNAME` / `SEED_SUPERADMIN_PASSWORD`. The learner's one-time

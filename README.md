@@ -1,8 +1,9 @@
 # qbank-deploy
 
 Deployment configuration for **PSC Archiver** — the NestJS API (`qbank-api`)
-and its two React SPAs: the staff back office (`qbank-admin`) and the
-learner-facing app (`qbank-learner`).
+and its three React SPAs: the staff back office (`qbank-admin`), the
+learner-facing app (`qbank-learner`) and the question writer portal
+(`qbank-writer`).
 
 Infrastructure lives in its own repo on purpose. In the two predecessor
 projects it was buried inside an application repo, and in both cases the copy
@@ -23,10 +24,11 @@ Fill these in — the checked-in files use placeholders.
 |---|---|---|
 | `ADMIN_HOST` | `/opt/qbank/.env` | Staff back-office hostname, e.g. `archiver.trynbuild.com` |
 | `LEARNER_HOST` | `.env` | Learner-app hostname, e.g. `learner.trynbuild.com` |
-| `CLIENT_URL` | `.env` | The API's CORS allow-list. Must name **both** origins, comma-separated |
+| `WRITER_HOST` | `.env` | Writer-portal hostname, e.g. `writer.trynbuild.com` |
+| `CLIENT_URL` | `.env` | The API's CORS allow-list. Must name **every** origin, comma-separated |
 | `ACME_EMAIL` | passed to `compose.traefik.yml` | Where Let's Encrypt sends expiry warnings |
 | `REPO_URL` | `scripts/setup-app.sh` | This repo's clone URL, if not `mroshan74/qbank-deploy` |
-| `API_IMAGE` / `WEB_IMAGE` / `LEARNER_IMAGE` | `.env` | GHCR paths, if the owner is not `mroshan74` |
+| `API_IMAGE` / `WEB_IMAGE` / `LEARNER_IMAGE` / `WRITER_IMAGE` | `.env` | GHCR paths, if the owner is not `mroshan74` |
 | `MONGODB_URI`, `JWT_SECRET`, `OPENAI_API_KEY` | `.env` | Real credentials |
 | `MESSAGE_CENTRAL_CUSTOMER_ID`, `MESSAGE_CENTRAL_KEY` | `.env` | Learner sign-in by SMS. The **key is the account password base64-encoded**, not the password |
 
@@ -40,6 +42,13 @@ Fill these in — the checked-in files use placeholders.
 > the API's **boot**, which takes staff login down too. That is intended — a
 > misconfigured provider should not first surface as one learner's failed
 > sign-in.
+
+> ⚠ **Adding the writer portal adds three keys** (`WRITER_HOST`, `WRITER_TAG`,
+> `WRITER_IMAGE`). `deploy.sh` compares the server's `.env` with `.env.example`
+> and pulls this repo first, so once this version is on the server **every**
+> deploy (api, web, learner too) stops on the env check until the three keys are
+> in `/opt/qbank/.env`. Add them, and the DNS record for `WRITER_HOST`, **before**
+> the first push that carries them. Order: [QUICKSTART.md → Adding the writer portal](QUICKSTART.md#adding-the-writer-portal-to-a-running-server).
 
 > ⚠ **`APP_HOST` was renamed to `ADMIN_HOST`** when the learner app arrived. A
 > server whose `.env` still has the old key stops on `deploy.sh`'s environment
@@ -59,29 +68,35 @@ Fill these in — the checked-in files use placeholders.
                         │     │              ├───── /api/* ──proxy─┐      │
                         │     │              └───── /fonts/* (PDF faces)  │
                         │     │                                    │      │
-                        │     └─▶ Host(LEARNER_HOST)               ├─▶ api│
-                        │          learner  nginx ── learner SPA   │ :5000│
+                        │     ├─▶ Host(LEARNER_HOST)               ├─▶ api│
+                        │     │    learner  nginx ── learner SPA   │ :5000│
+                        │     │              ├───── /api/* ──proxy─┤      │
+                        │     │              └───── /fonts/* (PDF faces)  │
+                        │     │                                    │      │
+                        │     └─▶ Host(WRITER_HOST)                │      │
+                        │          writer   nginx ── writer SPA    │      │
                         │                    ├──── /api/* ──proxy──┘      │
-                        │                    └──── /fonts/* (PDF faces)   │
+                        │                    └──── /fonts/* (Malayalam)   │
                         └─────────────────────────────────────────────────┘
                                                              │
                                                              ▼
                                                      MongoDB Atlas
 ```
 
-**Two hostnames, each its own origin.** Each SPA is built with an empty
+**One hostname per SPA, each its own origin.** Each SPA is built with an empty
 `VITE_BACKEND_URL`, so it calls the relative path `/api`, and its own nginx
 forwards that to the shared API container. Two SPAs cannot both own `/` behind
 one origin, which is why this is a second hostname rather than a path prefix.
 Consequences worth knowing:
 
-- No CORS in production — but **two** TLS certificates, so both DNS records must
-  resolve here before their first deploy.
+- No CORS in production — but **three** TLS certificates, so every DNS record
+  must resolve here before its first deploy.
 - The API is **never routed by Traefik** (`traefik.enable=false`) and publishes
   no host port. It is only reachable from inside the Docker network.
 - Traefik router and service names must be unique across the whole Docker
-  provider: the admin's are `archiver`, the learner's are `learner`.
-- Both web images work locally and in production — there is no baked-in backend
+  provider: the admin's are `archiver`, the learner's `learner`, the writer's
+  `writer`.
+- Every web image works locally and in production — there is no baked-in backend
   hostname, so no per-environment rebuild.
 - `CLIENT_URL` (the API's CORS allow-list) **replaces** the built-in fallback
   rather than extending it, so it has to name every origin. Adding a third
@@ -93,13 +108,13 @@ Consequences worth knowing:
 |---|---|
 | `QUICKSTART.md` | Bring a torn-down server back up. Commands only, in paste order |
 | `INSTRUCTION.md` | How the box itself was provisioned, before this repo ever reached it |
-| `compose.prod.yml` | The production stack (`api` + `web` + `learner`, plus the `seed` profile) |
+| `compose.prod.yml` | The production stack (`api` + `web` + `learner` + `writer`, plus the `seed` profile) |
 | `compose.traefik.yml` | Edge proxy and TLS. Brought up once, then left alone |
 | `compose.local.yml` | Prod-parity local stack, with its own MongoDB: `api`, `web`, `learner`, `writer` |
 | `.env.example` | The key schema `deploy.sh` validates the server's `.env` against |
 | `scripts/setup-app.sh` | One-time application setup on an already-provisioned server. Checks its prerequisites; provisions nothing |
 | `scripts/deploy.sh` | What CI runs over SSH. One service, one pinned tag |
-| `scripts/deploy-latest.sh` | Stop, pull `:latest`, start all three, verify. The manual test-round loop until the pipelines are wired up |
+| `scripts/deploy-latest.sh` | Stop, pull `:latest`, start every service, verify. The manual test-round loop until the pipelines are wired up |
 | `scripts/rollback.sh` | Redeploy an older tag |
 | `scripts/bootstrap.mjs` | First-run bootstrap, for **both** stacks (the `seed` compose profile in each). Seeds the System organization, the superadmin, the taxonomy, then the bundled papers and questions. Runs *inside* the `api` container — the host never needs Node.js, only Docker |
 | `docs/roadmaps/` | Planned work, one phase at a time. Current: [server-bootstrap-runbook.md](docs/roadmaps/server-bootstrap-runbook.md) |
@@ -370,9 +385,10 @@ owns the shared `traefik_proxy` network; `compose.prod.yml` joins it as
 
 ## Deploy
 
-**Normally you do nothing.** Push to the default branch in any of the three app
+**Normally you do nothing.** Push to the default branch in any of the four app
 repos and CI builds, publishes to GHCR, and runs `deploy.sh` over SSH. Note the
-branch differs: `master` for the api and admin, **`main`** for the client. (This
+branch differs: `master` for the api and admin, **`main`** for the learner app
+and the writer portal. (This
 infrastructure repo is on `main` too, which is what `deploy.sh`'s `git pull` and
 the `setup-app.sh` bootstrap URL both track.)
 
@@ -381,6 +397,7 @@ the `setup-app.sh` bootstrap URL both track.)
 | `qbank-api` | `api` | `ghcr.io/mroshan74/qbank-api` |
 | `qbank-admin` | `web` | `ghcr.io/mroshan74/qbank-admin` |
 | `qbank-learner` | `learner` | `ghcr.io/mroshan74/qbank-learner` |
+| `qbank-writer` | `writer` | `ghcr.io/mroshan74/qbank-writer` |
 
 By hand, on the server:
 
@@ -389,6 +406,7 @@ cd /opt/qbank
 ./scripts/deploy.sh api a1b2c3d
 ./scripts/deploy.sh web a1b2c3d       # staff back office
 ./scripts/deploy.sh learner a1b2c3d   # learner-facing app
+./scripts/deploy.sh writer a1b2c3d    # question writer portal
 ```
 
 **Exception: the very first deploy on a brand-new server.** Step 5 below
@@ -527,6 +545,7 @@ compose.prod.yml -p qbank ps` reports real status rather than just "Up":
 | `api` | `GET /api/readyz` on `127.0.0.1:5000` | process is up **and** MongoDB is connected |
 | `web` | `GET /healthz` on `127.0.0.1:80` | admin nginx is serving (deliberately does not depend on the api) |
 | `learner` | `GET /healthz` on `127.0.0.1:80` | learner nginx is serving (same — independent of the api) |
+| `writer` | `GET /healthz` on `127.0.0.1:80` | writer nginx is serving (same — independent of the api) |
 
 The api gets a 30s `start_period` for Nest boot plus the first Mongo
 connection; failures inside that window don't count against it.
@@ -542,6 +561,7 @@ cd /opt/qbank
 ./scripts/rollback.sh api                   # list tags available on this host
 ./scripts/rollback.sh api 9f8e7d6           # go back to that build
 ./scripts/rollback.sh learner 9f8e7d6       # same, for the learner app
+./scripts/rollback.sh writer 9f8e7d6        # same, for the writer portal
 ```
 
 Or from the GitHub UI, without SSH: **Actions → Build, Push & Deploy → Run

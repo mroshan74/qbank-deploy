@@ -2,12 +2,13 @@
 # scripts/deploy.sh — do not run `docker compose` here by hand except to
 # inspect state.
 #
-# Two public hostnames, each its own origin: Traefik terminates TLS and routes
-# ADMIN_HOST to `web` (the staff back office) and LEARNER_HOST to `learner` (the
-# learner app). Each container serves its own SPA and proxies /api to the shared
-# api container over the internal network. The api is never routed directly, so
-# there is no CORS in production — but there are now two certificates, and both
-# hostnames must resolve to this server before their first deploy.
+# Three public hostnames, each its own origin: Traefik terminates TLS and routes
+# ADMIN_HOST to `web` (the staff back office), LEARNER_HOST to `learner` (the
+# learner app) and WRITER_HOST to `writer` (the question writer portal). Each
+# container serves its own SPA and proxies /api to the shared api container
+# over the internal network. The api is never routed directly, so there is no
+# CORS in production — but there are three certificates, and every hostname
+# must resolve to this server before its first deploy.
 
 # docker compose -f compose.prod.yml -p qbank up -d
 
@@ -113,6 +114,39 @@ services:
       - "traefik.http.routers.learner.entrypoints=websecure"
       - "traefik.http.routers.learner.tls.certresolver=letsencrypt"
       - "traefik.http.services.learner.loadbalancer.server.port=80"
+
+  # The question writer portal (qbank-writer). Same shape as `learner`: its own
+  # nginx, its own /api proxy to the same api container, its own certificate.
+  # Writers sign in with a staff username and password; the API limits what a
+  # writer may write (decision 0056).
+  writer:
+    image: ${WRITER_IMAGE:-ghcr.io/mroshan74/qbank-writer}:${WRITER_TAG:?WRITER_TAG is not set in .env}
+    container_name: qbank-writer
+    restart: unless-stopped
+    depends_on:
+      - api
+    healthcheck:
+      # nginx's own static /healthz, not /api/readyz, for the same reason as
+      # the learner tier.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - traefik_proxy
+    labels:
+      - "traefik.enable=true"
+      # Unique across the Docker provider: not `archiver`, not `learner`.
+      - "traefik.http.routers.writer.rule=Host(`${WRITER_HOST:?WRITER_HOST is not set in .env}`)"
+      - "traefik.http.routers.writer.entrypoints=websecure"
+      - "traefik.http.routers.writer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.writer.loadbalancer.server.port=80"
 
   # One-shot bootstrap for a fresh database, the production twin of the `seed`
   # service in compose.local.yml. Run it after the stack is up:

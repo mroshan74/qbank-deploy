@@ -29,9 +29,9 @@
 # Afterwards you still have to, by hand — the script prints these and saves them
 # to /opt/qbank/REMAINING-STEPS.txt:
 #   1. fill in /opt/qbank/.env      (copied from .env.example)
-#   2. set the VPS_USER / VPS_HOST / VPS_SSH_KEY GitHub secrets, in all three
+#   2. set the VPS_USER / VPS_HOST / VPS_SSH_KEY GitHub secrets, in all four
 #      app repos
-#   3. point ADMIN_HOST's and LEARNER_HOST's DNS A records at this server
+#   3. point the ADMIN_HOST, LEARNER_HOST and WRITER_HOST DNS A records at this server
 #   4. bring up Traefik — that is what creates the shared traefik_proxy network
 #   5. log in to GHCR, if you declined the prompt for it here
 
@@ -219,12 +219,13 @@ Remaining steps:
 
   1. Fill in the environment:
        nano $APP_DIR/.env
-     At minimum: ADMIN_HOST, LEARNER_HOST, MONGODB_URI, JWT_SECRET,
-     OPENAI_API_KEY. Set CLIENT_URL to BOTH https:// origins, comma-separated —
-     it replaces the API's fallback list rather than extending it.
+     At minimum: ADMIN_HOST, LEARNER_HOST, WRITER_HOST, MONGODB_URI,
+     JWT_SECRET, OPENAI_API_KEY. Set CLIENT_URL to ALL THREE https:// origins,
+     comma-separated — it replaces the API's fallback list rather than
+     extending it.
 
-  2. In ALL THREE app repos' GitHub settings (qbank-api,
-     qbank-admin, qbank-learner), set the deploy secrets. VPS_USER
+  2. In ALL FOUR app repos' GitHub settings (qbank-api,
+     qbank-admin, qbank-learner, qbank-writer), set the deploy secrets. VPS_USER
      is the account this script just ran as — CI has to be that same account, or
      it cannot write to $APP_DIR:
        VPS_USER                 $RUN_AS
@@ -235,7 +236,7 @@ Remaining steps:
      and have its PUBLIC half installed on '$RUN_AS' by whoever manages server
      access — this script never writes authorized_keys.
 
-  3. Point BOTH DNS A records — ADMIN_HOST and LEARNER_HOST — at this server
+  3. Point ALL THREE DNS A records — ADMIN_HOST, LEARNER_HOST, WRITER_HOST — at this server
      and let them propagate. Each host gets its own certificate, and Let's
      Encrypt cannot issue one until that name resolves here.
 
@@ -249,13 +250,14 @@ $GHCR_STEP
   6. FIRST deploy only: deploy.sh's health check execs into a web container
      and curls /api/readyz through its nginx proxy — so it needs the api
      container already running, which isn't true yet. Bring them all up
-     together once instead (after setting real API_TAG/WEB_TAG/LEARNER_TAG
-     in .env):
+     together once instead (after setting real API_TAG/WEB_TAG/LEARNER_TAG/
+     WRITER_TAG in .env):
        docker compose -f compose.prod.yml -p qbank up -d
      Every deploy after this one — from CI or by hand — can safely use:
        ./scripts/deploy.sh api <tag>
        ./scripts/deploy.sh web <tag>       # staff back office
        ./scripts/deploy.sh learner <tag>   # learner-facing app
+       ./scripts/deploy.sh writer <tag>    # question writer portal
 
   7. Seed the database — one command, on an empty database. It creates the
      System organization and the superadmin, waits for the api, then seeds the
