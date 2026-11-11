@@ -694,6 +694,62 @@ Things that are true because of how it works:
   through the API in memory. nginx's 2 MB request cap on the admin host is the
   ceiling; the API refuses a file over 1.9 MB with a sentence.
 
+### Open the app inside Telegram
+
+A third switch, `TELEGRAM_MINI_APP_ENABLED`, for sending learners into the
+learner app **inside** Telegram, as a Mini App, instead of into Telegram's
+browser (`qbank-api/doc/decisions/0064-telegram-mini-app-sign-in.md`, D10).
+It ships off, and with it off the bot's posts are exactly what they were.
+
+What it changes when on:
+
+- the bot's **menu button** (beside the message box in its chat) opens
+  `https://<LEARNER_HOST>` in place; the API sets it each time it starts;
+- the button under the bot's welcome, and under a paper it is asked for,
+  opens the app in place;
+- the button under a **channel post** leads to
+  `https://t.me/<bot>?startapp=...`, which opens that paper inside
+  Telegram, signed in, counted on the same share link. The web address stays
+  in the post's text.
+
+1. **Set the bot's Main Mini App in BotFather.** Open BotFather's own mini
+   app (or `/mybots`), choose the bot, then Bot Settings, Configure Mini
+   App, Enable Mini App, and give it `https://<LEARNER_HOST>` (no path).
+   **This must come first:** a `startapp` link to a bot with no Main Mini
+   App opens the bot's chat and nothing else, so posts made with the switch
+   on would lead nowhere.
+2. **Add the line to the server's `.env`** and restart the API:
+
+   ```bash
+   cd /opt/qbank
+   echo 'TELEGRAM_MINI_APP_ENABLED=true' >> .env
+   docker compose -f compose.prod.yml -p qbank up -d api
+   docker logs qbank-api 2>&1 | grep -i 'bot profile' | tail -1
+   ```
+
+   The log should say `Telegram bot profile set (menu button: opens the
+   Mini App).`
+3. **Check it on a phone.** Open the bot: the menu button says Open and
+   opens the app, signed in. Post a paper link to a test channel from the
+   admin and tap its button: the paper opens inside Telegram.
+
+**To switch it off again**, remove the line and restart the API. New posts
+carry the web button again. Posts already in a channel keep the button they
+were sent with, and the menu button stays until it is changed in BotFather
+(Bot Settings, Menu Button), since the API only ever sets it, never clears
+it.
+
+On the local stack the same key is in `compose.local.yml` (default
+`false`). It needs a real https `LEARNER_APP_URL` there, such as a tunnel to
+`http://localhost:8081`, because Telegram refuses a `localhost` address.
+With no such address the API leaves the dev bot's menu button alone, so one
+pointed at a tunnel by hand survives a restart.
+
+The bot's command list (`/start`, `/help`) is set at every start whether
+the switch is on or not, and the bot now answers a learner's `/start` with
+a welcome and a button to the learner site. Connecting a channel is
+unchanged.
+
 ### Sign in with Telegram
 
 A separate switch from the bot, for the learner app's **Continue with
