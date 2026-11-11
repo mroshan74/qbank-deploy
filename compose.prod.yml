@@ -26,6 +26,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # The learner site the Telegram bot puts behind the button under a post
+      # (qbank-api decision 0063). Derived from LEARNER_HOST rather than typed
+      # a second time, so the button can never point at a host the learner app
+      # is not on. It must be https and a real host: Telegram refuses anything
+      # else as a button. Read only when TELEGRAM_BOT_TOKEN is set.
+      LEARNER_APP_URL: https://${LEARNER_HOST:?LEARNER_HOST is not set in .env}
     # No `ports:` on purpose. Traefik and nginx both reach this container over
     # the shared network; publishing a host port would expose the API on the
     # public IP over plain HTTP, bypassing TLS.

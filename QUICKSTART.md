@@ -439,6 +439,26 @@ curl -s https://qfoundry.in/healthz                             # ok
 
 ---
 
+## Switch Telegram on (optional)
+
+Off by default. Needs the production bot's token from BotFather; never the
+token used on a developer machine. Detail: `README.md`, "Switch Telegram on".
+
+```bash
+cd /opt/qbank
+echo 'TELEGRAM_BOT_TOKEN=<the token>' >> .env
+docker compose -f compose.prod.yml -p qbank up -d api
+docker logs qbank-api 2>&1 | grep -i telegram | tail -3
+# → Telegram updates: long polling started.
+# → Telegram post queue started ...
+```
+
+Then, in the admin as a superadmin: User Management, the organization's owner,
+grant `telegram:manage`. The owner connects a channel under Workspace settings,
+Telegram.
+
+Off again: remove the line from `.env`, then the same `up -d api`.
+
 ## When it goes wrong
 
 | Symptom | Cause |

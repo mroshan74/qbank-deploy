@@ -36,6 +36,7 @@ placeholders.
 | `API_IMAGE` / `WEB_IMAGE` / `LEARNER_IMAGE` / `WRITER_IMAGE` / `HOMEPAGE_IMAGE` | `.env` | GHCR paths, if the owner is not `mroshan74` |
 | `MONGODB_URI`, `JWT_SECRET`, `OPENAI_API_KEY` | `.env` | Real credentials |
 | `MESSAGE_CENTRAL_CUSTOMER_ID`, `MESSAGE_CENTRAL_KEY` | `.env` | Learner sign-in by SMS. The **key is the account password base64-encoded**, not the password |
+| `TELEGRAM_BOT_TOKEN` | `.env`, **optional** | The production Telegram bot's token, from BotFather. Absent or empty, Telegram is off and nothing else changes. See [Switch Telegram on](#switch-telegram-on) |
 
 > ⚠ **Leaving `OTP_PROVIDER` out disables learner sign-in.** The API's code
 > default is `console`, which sends no SMS at all, so the key is set to
@@ -629,6 +630,57 @@ nano .env                                  # edit the value
 ```
 
 Rotating `JWT_SECRET` signs everyone out, which is the intended effect.
+
+## Switch Telegram on
+
+Telegram is a module of the API (`qbank-api/doc/decisions/0063-telegram-integration.md`):
+one shared bot that an organization adds to its channel, and through which it
+posts papers. It ships **off**. Nothing below is needed for a deploy to work.
+
+1. **Create the production bot** in Telegram's BotFather (`/newbot`). Keep its
+   token. This is a different bot from the one used on a developer machine or
+   on the local stack: updates arrive by long polling, and two processes
+   polling the same bot answer each other with `409 Conflict`.
+2. **Add the token to the server's `.env`** and restart the API:
+
+   ```bash
+   cd /opt/qbank
+   echo 'TELEGRAM_BOT_TOKEN=<the token>' >> .env
+   docker compose -f compose.prod.yml -p qbank up -d api
+   docker logs qbank-api 2>&1 | grep -i telegram | tail -3
+   ```
+
+   The log should say `Telegram updates: long polling started.` and
+   `Telegram post queue started`. `LEARNER_APP_URL`, the address behind the
+   button under a post, needs no line of its own: `compose.prod.yml` sets it to
+   `https://<LEARNER_HOST>`.
+3. **Grant the permission.** Nobody can use Telegram yet: `telegram:manage` is
+   in no role's defaults. A superadmin grants it, in the admin's User
+   Management, to the owner of each organization that should have it (the
+   vendor's own included). The owner then sees Workspace settings, Telegram,
+   connects a channel there, and posts from a paper's menu.
+
+**To switch it off again**, remove the line (or empty it) and restart the API.
+Connected channels and their history stay in the database; nothing is posted
+and the admin says Telegram is not set up.
+
+**If the token leaks**, revoke it in BotFather (`/revoke`), put the new one in
+`.env` and restart the API. Whoever holds the token can post to every connected
+channel, so treat it like `JWT_SECRET`.
+
+Things that are true because of how it works:
+
+- **One API container.** The bot's updates and the quiz queue both assume it,
+  like the rate limits and the AI-tagging queue already do.
+- **No inbound route.** Telegram never calls this server; the API calls
+  Telegram. Nothing changes in Traefik or nginx.
+- **A quiz is paced on purpose**, one question every 3 seconds into a channel,
+  which is Telegram's own limit. A restart in the middle is safe: the run
+  resumes, and a question caught mid-send is counted as failed rather than
+  posted twice.
+- **The PDF posted to a channel is built in the admin's browser** and passes
+  through the API in memory. nginx's 2 MB request cap on the admin host is the
+  ceiling; the API refuses a file over 1.9 MB with a sentence.
 
 ## Bootstrap a fresh database
 
