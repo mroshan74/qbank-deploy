@@ -74,6 +74,9 @@ x-api-env: &api-env
   # Off by default. Needs a real https LEARNER_APP_URL (a tunnel to :8081)
   # and, for a post's button, the bot's Main Mini App set in BotFather.
   TELEGRAM_MINI_APP_ENABLED: ${TELEGRAM_MINI_APP_ENABLED:-false}
+  # The most learner attempts written to the database a second (qbank-api
+  # decision 0066). Here so the load test can be run with other values.
+  ATTEMPT_WRITES_PER_SECOND: ${ATTEMPT_WRITES_PER_SECOND:-60}
   # The least time between two new-lead messages about one channel. Here only
   # so a local check can shorten it; a server leaves it at a minute.
   TELEGRAM_LEAD_ALERT_GAP_MS: ${TELEGRAM_LEAD_ALERT_GAP_MS:-60000}
