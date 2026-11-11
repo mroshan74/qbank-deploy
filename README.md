@@ -672,6 +672,18 @@ Things that are true because of how it works:
 
 - **One API container.** The bot's updates and the quiz queue both assume it,
   like the rate limits and the AI-tagging queue already do.
+- **The same token signs learners in from inside Telegram.** With
+  `TELEGRAM_BOT_TOKEN` set, the learner app opened as a Telegram Mini App signs
+  a learner in from Telegram's launch data, with no code by SMS
+  (`qbank-api/doc/decisions/0064-telegram-mini-app-sign-in.md`). There is no
+  separate key or switch. A first sign-in needs the API's update loop, since
+  the learner's number arrives as a message to the bot.
+- **The API trusts `X-Forwarded-For` from private addresses**, so its rate
+  limits count the visitor and not the frontend's nginx. That is safe because
+  Traefik discards whatever a visitor puts in that header and writes its own.
+  **If another public proxy is ever put in front of Traefik (a CDN), revisit
+  it** (`app.set('trust proxy', ...)` in `qbank-api/src/main.ts`): the visitor
+  would then be that proxy, and everyone would share one limit again.
 - **No inbound route.** Telegram never calls this server; the API calls
   Telegram. Nothing changes in Traefik or nginx.
 - **A quiz is paced on purpose**, one question every 3 seconds into a channel,
