@@ -682,6 +682,36 @@ Things that are true because of how it works:
   through the API in memory. nginx's 2 MB request cap on the admin host is the
   ceiling; the API refuses a file over 1.9 MB with a sentence.
 
+### Sign in with Telegram
+
+A separate switch from the bot, for the learner app's **Continue with
+Telegram** button (`qbank-api/doc/04-auth.md`). It lets a learner sign in
+without an SMS code: Telegram vouches for their number if they agree to share
+it. It is off until both values below are set, and it changes nothing about
+one-time codes, which stay with Message Central.
+
+1. In BotFather, open the production bot, then **Login Widget**. Add
+   `https://<LEARNER_HOST>/login/telegram` to the allowed addresses (and the
+   bare `https://<LEARNER_HOST>` origin). Note the **Client ID** and **Client
+   Secret** shown there.
+2. Add them to the server's `.env` and restart the API:
+
+   ```bash
+   cd /opt/qbank
+   printf 'TELEGRAM_LOGIN_CLIENT_ID=<the id>\nTELEGRAM_LOGIN_CLIENT_SECRET=<the secret>\n' >> .env
+   docker compose -f compose.prod.yml -p qbank up -d api
+   curl -s https://<LEARNER_HOST>/api/auth/telegram/config
+   # → {"enabled":true,"clientId":"...","authorizeUrl":"https://oauth.telegram.org/auth",...}
+   ```
+
+3. Open the learner app signed out. The sign-in screen now has the button.
+
+`CLIENT_URL` must already name the learner origin (it does in the template).
+To switch it off, remove the two lines and restart the API; the button goes and
+nobody is signed out. **This has not yet been run against Telegram's own login
+server**, only against a stand-in: do the first sign-in yourself before
+telling anyone about it.
+
 ## Bootstrap a fresh database
 
 The app has never been in production, so there is no migration path — a fresh

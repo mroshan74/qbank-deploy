@@ -68,6 +68,16 @@ x-api-env: &api-env
   # refuses a localhost address in a button, so a post made from this stack
   # needs a real https host here to carry one.
   LEARNER_APP_URL: ${LEARNER_APP_URL:-http://localhost:8081}
+  # Sign in with Telegram (qbank-api decision 0063, D13). Empty by default,
+  # which leaves the learner app's Continue with Telegram button off. The two
+  # values come from BotFather (Login Widget), which must also list
+  # http://localhost:8081/login/telegram as an allowed redirect address.
+  TELEGRAM_LOGIN_CLIENT_ID: ${TELEGRAM_LOGIN_CLIENT_ID:-}
+  TELEGRAM_LOGIN_CLIENT_SECRET: ${TELEGRAM_LOGIN_CLIENT_SECRET:-}
+  # Only for a stand-in login server: the address the browser is sent to, and
+  # where this container reaches the same server.
+  TELEGRAM_LOGIN_ISSUER: ${TELEGRAM_LOGIN_ISSUER:-https://oauth.telegram.org}
+  TELEGRAM_LOGIN_INTERNAL_URL: ${TELEGRAM_LOGIN_INTERNAL_URL:-}
   SEEDER_DATA_DIR: data
   SEED_SUPERADMIN_USERNAME: ${SEED_SUPERADMIN_USERNAME:-superadmin}
   SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMe123!}
