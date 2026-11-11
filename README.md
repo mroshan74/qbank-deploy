@@ -702,10 +702,16 @@ without an SMS code: Telegram vouches for their number if they agree to share
 it. It is off until both values below are set, and it changes nothing about
 one-time codes, which stay with Message Central.
 
-1. In BotFather, open the production bot, then **Login Widget**. Add
+1. In the BotFather mini app (its own screen, not the chat commands), open the
+   production bot, then **Login Widget**. That screen starts in the legacy
+   mode, which asks for a domain only and shows no credentials: tap **Switch
+   to OpenID Connect Login** first. Then add
    `https://<LEARNER_HOST>/login/telegram` to the allowed addresses (and the
-   bare `https://<LEARNER_HOST>` origin). Note the **Client ID** and **Client
-   Secret** shown there.
+   bare `https://<LEARNER_HOST>` origin). Note the **Client ID** (the bot's
+   numeric id) and the **Client Secret** shown there. The secret is not the
+   bot token. Ignore the old "Widget configuration" web page and its
+   `telegram-widget.js` embed code: that is the legacy widget, which has no
+   credentials and never shares a phone number, and the app does not use it.
 2. Add them to the server's `.env` and restart the API:
 
    ```bash
@@ -720,9 +726,10 @@ one-time codes, which stay with Message Central.
 
 `CLIENT_URL` must already name the learner origin (it does in the template).
 To switch it off, remove the two lines and restart the API; the button goes and
-nobody is signed out. **This has not yet been run against Telegram's own login
-server**, only against a stand-in: do the first sign-in yourself before
-telling anyone about it.
+nobody is signed out. Switched on in production on 2026-11-11, and the owner
+reported it working against Telegram's own login server. Before that it had
+only met a stand-in, so on a new environment do the first sign-in yourself
+before telling anyone about it.
 
 ## Bootstrap a fresh database
 
