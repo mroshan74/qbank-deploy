@@ -57,6 +57,30 @@ x-api-env: &api-env
   # The account password, base64-encoded. The raw password is rejected.
   MESSAGE_CENTRAL_KEY: ${MESSAGE_CENTRAL_KEY:-}
   MESSAGE_CENTRAL_EMAIL: ${MESSAGE_CENTRAL_EMAIL:-}
+  # Telegram (qbank-api decision 0063). Empty by default, which leaves the
+  # whole module inert: no update loop starts and /api/telegram/* answers 503.
+  # To use it, put the DEV bot's token in a .env beside this file. Never the
+  # production bot's: two processes polling one bot knock each other out (409).
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  # Only for pointing the API at a stand-in or a self-hosted Bot API server.
+  TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
+  # The learner site the bot puts behind the button under a post. Telegram
+  # refuses a localhost address in a button, so a post made from this stack
+  # needs a real https host here to carry one.
+  LEARNER_APP_URL: ${LEARNER_APP_URL:-http://localhost:8081}
+  # The least time between two new-lead messages about one channel. Here only
+  # so a local check can shorten it; a server leaves it at a minute.
+  TELEGRAM_LEAD_ALERT_GAP_MS: ${TELEGRAM_LEAD_ALERT_GAP_MS:-60000}
+  # Sign in with Telegram (qbank-api decision 0063, D13). Empty by default,
+  # which leaves the learner app's Continue with Telegram button off. The two
+  # values come from BotFather (Login Widget), which must also list
+  # http://localhost:8081/login/telegram as an allowed redirect address.
+  TELEGRAM_LOGIN_CLIENT_ID: ${TELEGRAM_LOGIN_CLIENT_ID:-}
+  TELEGRAM_LOGIN_CLIENT_SECRET: ${TELEGRAM_LOGIN_CLIENT_SECRET:-}
+  # Only for a stand-in login server: the address the browser is sent to, and
+  # where this container reaches the same server.
+  TELEGRAM_LOGIN_ISSUER: ${TELEGRAM_LOGIN_ISSUER:-https://oauth.telegram.org}
+  TELEGRAM_LOGIN_INTERNAL_URL: ${TELEGRAM_LOGIN_INTERNAL_URL:-}
   SEEDER_DATA_DIR: data
   SEED_SUPERADMIN_USERNAME: ${SEED_SUPERADMIN_USERNAME:-superadmin}
   SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMe123!}

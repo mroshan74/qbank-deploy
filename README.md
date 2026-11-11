@@ -36,6 +36,7 @@ placeholders.
 | `API_IMAGE` / `WEB_IMAGE` / `LEARNER_IMAGE` / `WRITER_IMAGE` / `HOMEPAGE_IMAGE` | `.env` | GHCR paths, if the owner is not `mroshan74` |
 | `MONGODB_URI`, `JWT_SECRET`, `OPENAI_API_KEY` | `.env` | Real credentials |
 | `MESSAGE_CENTRAL_CUSTOMER_ID`, `MESSAGE_CENTRAL_KEY` | `.env` | Learner sign-in by SMS. The **key is the account password base64-encoded**, not the password |
+| `TELEGRAM_BOT_TOKEN` | `.env`, **optional** | The production Telegram bot's token, from BotFather. Absent or empty, Telegram is off and nothing else changes. See [Switch Telegram on](#switch-telegram-on) |
 
 > ⚠ **Leaving `OTP_PROVIDER` out disables learner sign-in.** The API's code
 > default is `console`, which sends no SMS at all, so the key is set to
@@ -163,6 +164,18 @@ Override the seeded account with `SEED_SUPERADMIN_USERNAME` /
 `WRITER_PORT` / `HOMEPAGE_PORT`. The `writer` and `homepage` services build
 `../qbank-writer` and `../qbank-homepage`; both reach the server in Phase 4 of
 the workspace roadmap `docs/roadmaps/qfoundry-brand-and-hostnames.md`.
+
+**Telegram is off here by default.** The api container gets `TELEGRAM_BOT_TOKEN`
+empty, which leaves the API's Telegram module inert (`/api/telegram/*` answers
+503; `qbank-api/doc/decisions/0063-telegram-integration.md`). To try it, put the
+**dev** bot's token in a `.env` beside `compose.local.yml` and recreate the api
+container. Never the production bot's: updates arrive by long polling, and two
+processes polling one bot knock each other out. `TELEGRAM_API_BASE_URL` points
+the API at a stand-in Bot API server for checks that need no real bot, and
+`LEARNER_APP_URL` (default `http://localhost:8081`) is the address the bot puts
+behind a post's button; Telegram refuses a `localhost` address there, so a post
+made from this stack needs a real https host to carry one. The server keys land
+in Phase 6 of `qbank-api/doc/roadmaps/telegram-integration.md`.
 
 > **This stack is the only place three things get tested before a server sees
 > them**, because `pnpm dev` exercises none of them: each SPA's single-origin
@@ -617,6 +630,87 @@ nano .env                                  # edit the value
 ```
 
 Rotating `JWT_SECRET` signs everyone out, which is the intended effect.
+
+## Switch Telegram on
+
+Telegram is a module of the API (`qbank-api/doc/decisions/0063-telegram-integration.md`):
+one shared bot that an organization adds to its channel, and through which it
+posts papers. It ships **off**. Nothing below is needed for a deploy to work.
+
+1. **Create the production bot** in Telegram's BotFather (`/newbot`). Keep its
+   token. This is a different bot from the one used on a developer machine or
+   on the local stack: updates arrive by long polling, and two processes
+   polling the same bot answer each other with `409 Conflict`.
+2. **Add the token to the server's `.env`** and restart the API:
+
+   ```bash
+   cd /opt/qbank
+   echo 'TELEGRAM_BOT_TOKEN=<the token>' >> .env
+   docker compose -f compose.prod.yml -p qbank up -d api
+   docker logs qbank-api 2>&1 | grep -i telegram | tail -3
+   ```
+
+   The log should say `Telegram updates: long polling started.` and
+   `Telegram post queue started`. `LEARNER_APP_URL`, the address behind the
+   button under a post, needs no line of its own: `compose.prod.yml` sets it to
+   `https://<LEARNER_HOST>`.
+3. **Grant the permission.** Nobody can use Telegram yet: `telegram:manage` is
+   in no role's defaults. A superadmin grants it, in the admin's User
+   Management, to the owner of each organization that should have it (the
+   vendor's own included). The owner then sees Workspace settings, Telegram,
+   connects a channel there, and posts from a paper's menu.
+
+**To switch it off again**, remove the line (or empty it) and restart the API.
+Connected channels and their history stay in the database; nothing is posted
+and the admin says Telegram is not set up.
+
+**If the token leaks**, revoke it in BotFather (`/revoke`), put the new one in
+`.env` and restart the API. Whoever holds the token can post to every connected
+channel, so treat it like `JWT_SECRET`.
+
+Things that are true because of how it works:
+
+- **One API container.** The bot's updates and the quiz queue both assume it,
+  like the rate limits and the AI-tagging queue already do.
+- **No inbound route.** Telegram never calls this server; the API calls
+  Telegram. Nothing changes in Traefik or nginx.
+- **A quiz is paced on purpose**, one question every 3 seconds into a channel,
+  which is Telegram's own limit. A restart in the middle is safe: the run
+  resumes, and a question caught mid-send is counted as failed rather than
+  posted twice.
+- **The PDF posted to a channel is built in the admin's browser** and passes
+  through the API in memory. nginx's 2 MB request cap on the admin host is the
+  ceiling; the API refuses a file over 1.9 MB with a sentence.
+
+### Sign in with Telegram
+
+A separate switch from the bot, for the learner app's **Continue with
+Telegram** button (`qbank-api/doc/04-auth.md`). It lets a learner sign in
+without an SMS code: Telegram vouches for their number if they agree to share
+it. It is off until both values below are set, and it changes nothing about
+one-time codes, which stay with Message Central.
+
+1. In BotFather, open the production bot, then **Login Widget**. Add
+   `https://<LEARNER_HOST>/login/telegram` to the allowed addresses (and the
+   bare `https://<LEARNER_HOST>` origin). Note the **Client ID** and **Client
+   Secret** shown there.
+2. Add them to the server's `.env` and restart the API:
+
+   ```bash
+   cd /opt/qbank
+   printf 'TELEGRAM_LOGIN_CLIENT_ID=<the id>\nTELEGRAM_LOGIN_CLIENT_SECRET=<the secret>\n' >> .env
+   docker compose -f compose.prod.yml -p qbank up -d api
+   curl -s https://<LEARNER_HOST>/api/auth/telegram/config
+   # → {"enabled":true,"clientId":"...","authorizeUrl":"https://oauth.telegram.org/auth",...}
+   ```
+
+3. Open the learner app signed out. The sign-in screen now has the button.
+
+`CLIENT_URL` must already name the learner origin (it does in the template).
+To switch it off, remove the two lines and restart the API; the button goes and
+nobody is signed out. **This has not yet been run against Telegram's own login
+server**, only against a stand-in: do the first sign-in yourself before
+telling anyone about it.
 
 ## Bootstrap a fresh database
 
