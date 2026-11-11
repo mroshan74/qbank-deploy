@@ -164,6 +164,18 @@ Override the seeded account with `SEED_SUPERADMIN_USERNAME` /
 `../qbank-writer` and `../qbank-homepage`; both reach the server in Phase 4 of
 the workspace roadmap `docs/roadmaps/qfoundry-brand-and-hostnames.md`.
 
+**Telegram is off here by default.** The api container gets `TELEGRAM_BOT_TOKEN`
+empty, which leaves the API's Telegram module inert (`/api/telegram/*` answers
+503; `qbank-api/doc/decisions/0063-telegram-integration.md`). To try it, put the
+**dev** bot's token in a `.env` beside `compose.local.yml` and recreate the api
+container. Never the production bot's: updates arrive by long polling, and two
+processes polling one bot knock each other out. `TELEGRAM_API_BASE_URL` points
+the API at a stand-in Bot API server for checks that need no real bot, and
+`LEARNER_APP_URL` (default `http://localhost:8081`) is the address the bot puts
+behind a post's button; Telegram refuses a `localhost` address there, so a post
+made from this stack needs a real https host to carry one. The server keys land
+in Phase 6 of `qbank-api/doc/roadmaps/telegram-integration.md`.
+
 > **This stack is the only place three things get tested before a server sees
 > them**, because `pnpm dev` exercises none of them: each SPA's single-origin
 > `/api` proxy (dev is cross-origin to `:5000`); **both** apps' PDF fonts, which

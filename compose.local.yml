@@ -57,6 +57,17 @@ x-api-env: &api-env
   # The account password, base64-encoded. The raw password is rejected.
   MESSAGE_CENTRAL_KEY: ${MESSAGE_CENTRAL_KEY:-}
   MESSAGE_CENTRAL_EMAIL: ${MESSAGE_CENTRAL_EMAIL:-}
+  # Telegram (qbank-api decision 0063). Empty by default, which leaves the
+  # whole module inert: no update loop starts and /api/telegram/* answers 503.
+  # To use it, put the DEV bot's token in a .env beside this file. Never the
+  # production bot's: two processes polling one bot knock each other out (409).
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  # Only for pointing the API at a stand-in or a self-hosted Bot API server.
+  TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
+  # The learner site the bot puts behind the button under a post. Telegram
+  # refuses a localhost address in a button, so a post made from this stack
+  # needs a real https host here to carry one.
+  LEARNER_APP_URL: ${LEARNER_APP_URL:-http://localhost:8081}
   SEEDER_DATA_DIR: data
   SEED_SUPERADMIN_USERNAME: ${SEED_SUPERADMIN_USERNAME:-superadmin}
   SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMe123!}
