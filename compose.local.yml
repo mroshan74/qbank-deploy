@@ -68,6 +68,9 @@ x-api-env: &api-env
   # refuses a localhost address in a button, so a post made from this stack
   # needs a real https host here to carry one.
   LEARNER_APP_URL: ${LEARNER_APP_URL:-http://localhost:8081}
+  # The least time between two new-lead messages about one channel. Here only
+  # so a local check can shorten it; a server leaves it at a minute.
+  TELEGRAM_LEAD_ALERT_GAP_MS: ${TELEGRAM_LEAD_ALERT_GAP_MS:-60000}
   # Sign in with Telegram (qbank-api decision 0063, D13). Empty by default,
   # which leaves the learner app's Continue with Telegram button off. The two
   # values come from BotFather (Login Widget), which must also list
