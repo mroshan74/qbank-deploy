@@ -672,6 +672,18 @@ Things that are true because of how it works:
 
 - **One API container.** The bot's updates and the quiz queue both assume it,
   like the rate limits and the AI-tagging queue already do.
+- **The same token signs learners in from inside Telegram.** With
+  `TELEGRAM_BOT_TOKEN` set, the learner app opened as a Telegram Mini App signs
+  a learner in from Telegram's launch data, with no code by SMS
+  (`qbank-api/doc/decisions/0064-telegram-mini-app-sign-in.md`). There is no
+  separate key or switch. A first sign-in needs the API's update loop, since
+  the learner's number arrives as a message to the bot.
+- **The API trusts `X-Forwarded-For` from private addresses**, so its rate
+  limits count the visitor and not the frontend's nginx. That is safe because
+  Traefik discards whatever a visitor puts in that header and writes its own.
+  **If another public proxy is ever put in front of Traefik (a CDN), revisit
+  it** (`app.set('trust proxy', ...)` in `qbank-api/src/main.ts`): the visitor
+  would then be that proxy, and everyone would share one limit again.
 - **No inbound route.** Telegram never calls this server; the API calls
   Telegram. Nothing changes in Traefik or nginx.
 - **A quiz is paced on purpose**, one question every 3 seconds into a channel,
@@ -682,6 +694,62 @@ Things that are true because of how it works:
   through the API in memory. nginx's 2 MB request cap on the admin host is the
   ceiling; the API refuses a file over 1.9 MB with a sentence.
 
+### Open the app inside Telegram
+
+A third switch, `TELEGRAM_MINI_APP_ENABLED`, for sending learners into the
+learner app **inside** Telegram, as a Mini App, instead of into Telegram's
+browser (`qbank-api/doc/decisions/0064-telegram-mini-app-sign-in.md`, D10).
+It ships off, and with it off the bot's posts are exactly what they were.
+
+What it changes when on:
+
+- the bot's **menu button** (beside the message box in its chat) opens
+  `https://<LEARNER_HOST>` in place; the API sets it each time it starts;
+- the button under the bot's welcome, and under a paper it is asked for,
+  opens the app in place;
+- the button under a **channel post** leads to
+  `https://t.me/<bot>?startapp=...`, which opens that paper inside
+  Telegram, signed in, counted on the same share link. The web address stays
+  in the post's text.
+
+1. **Set the bot's Main Mini App in BotFather.** Open BotFather's own mini
+   app (or `/mybots`), choose the bot, then Bot Settings, Configure Mini
+   App, Enable Mini App, and give it `https://<LEARNER_HOST>` (no path).
+   **This must come first:** a `startapp` link to a bot with no Main Mini
+   App opens the bot's chat and nothing else, so posts made with the switch
+   on would lead nowhere.
+2. **Add the line to the server's `.env`** and restart the API:
+
+   ```bash
+   cd /opt/qbank
+   echo 'TELEGRAM_MINI_APP_ENABLED=true' >> .env
+   docker compose -f compose.prod.yml -p qbank up -d api
+   docker logs qbank-api 2>&1 | grep -i 'bot profile' | tail -1
+   ```
+
+   The log should say `Telegram bot profile set (menu button: opens the
+   Mini App).`
+3. **Check it on a phone.** Open the bot: the menu button says Open and
+   opens the app, signed in. Post a paper link to a test channel from the
+   admin and tap its button: the paper opens inside Telegram.
+
+**To switch it off again**, remove the line and restart the API. New posts
+carry the web button again. Posts already in a channel keep the button they
+were sent with, and the menu button stays until it is changed in BotFather
+(Bot Settings, Menu Button), since the API only ever sets it, never clears
+it.
+
+On the local stack the same key is in `compose.local.yml` (default
+`false`). It needs a real https `LEARNER_APP_URL` there, such as a tunnel to
+`http://localhost:8081`, because Telegram refuses a `localhost` address.
+With no such address the API leaves the dev bot's menu button alone, so one
+pointed at a tunnel by hand survives a restart.
+
+The bot's command list (`/start`, `/help`) is set at every start whether
+the switch is on or not, and the bot now answers a learner's `/start` with
+a welcome and a button to the learner site. Connecting a channel is
+unchanged.
+
 ### Sign in with Telegram
 
 A separate switch from the bot, for the learner app's **Continue with
@@ -690,10 +758,16 @@ without an SMS code: Telegram vouches for their number if they agree to share
 it. It is off until both values below are set, and it changes nothing about
 one-time codes, which stay with Message Central.
 
-1. In BotFather, open the production bot, then **Login Widget**. Add
+1. In the BotFather mini app (its own screen, not the chat commands), open the
+   production bot, then **Login Widget**. That screen starts in the legacy
+   mode, which asks for a domain only and shows no credentials: tap **Switch
+   to OpenID Connect Login** first. Then add
    `https://<LEARNER_HOST>/login/telegram` to the allowed addresses (and the
-   bare `https://<LEARNER_HOST>` origin). Note the **Client ID** and **Client
-   Secret** shown there.
+   bare `https://<LEARNER_HOST>` origin). Note the **Client ID** (the bot's
+   numeric id) and the **Client Secret** shown there. The secret is not the
+   bot token. Ignore the old "Widget configuration" web page and its
+   `telegram-widget.js` embed code: that is the legacy widget, which has no
+   credentials and never shares a phone number, and the app does not use it.
 2. Add them to the server's `.env` and restart the API:
 
    ```bash
@@ -708,9 +782,10 @@ one-time codes, which stay with Message Central.
 
 `CLIENT_URL` must already name the learner origin (it does in the template).
 To switch it off, remove the two lines and restart the API; the button goes and
-nobody is signed out. **This has not yet been run against Telegram's own login
-server**, only against a stand-in: do the first sign-in yourself before
-telling anyone about it.
+nobody is signed out. Switched on in production on 2026-11-11, and the owner
+reported it working against Telegram's own login server. Before that it had
+only met a stand-in, so on a new environment do the first sign-in yourself
+before telling anyone about it.
 
 ## Bootstrap a fresh database
 
