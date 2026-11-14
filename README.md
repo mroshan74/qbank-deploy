@@ -170,7 +170,13 @@ empty, which leaves the API's Telegram module inert (`/api/telegram/*` answers
 503; `qbank-api/doc/decisions/0063-telegram-integration.md`). To try it, put the
 **dev** bot's token in a `.env` beside `compose.local.yml` and recreate the api
 container. Never the production bot's: updates arrive by long polling, and two
-processes polling one bot knock each other out. `TELEGRAM_API_BASE_URL` points
+processes polling one bot knock each other out. **If the token is one a server
+also uses, add `TELEGRAM_UPDATES_ENABLED=false` to that `.env`.** Otherwise the
+two APIs split the bot's updates, and a channel link minted on the server is
+answered by this stack, against its own database, as "this link has expired";
+the API logs an error naming the 409 when that happens. With it off, posting and
+the admin pages still work; connecting a channel and a first Mini App sign-in do
+not. `TELEGRAM_API_BASE_URL` points
 the API at a stand-in Bot API server for checks that need no real bot, and
 `LEARNER_APP_URL` (default `http://localhost:8081`) is the address the bot puts
 behind a post's button; Telegram refuses a `localhost` address there, so a post

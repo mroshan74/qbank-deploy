@@ -62,6 +62,13 @@ x-api-env: &api-env
   # To use it, put the DEV bot's token in a .env beside this file. Never the
   # production bot's: two processes polling one bot knock each other out (409).
   TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  # Whether this API polls the bot for updates. Set it to false in .env while
+  # the token above is one a server also polls: otherwise the two split the
+  # bot's updates, and a channel link minted on the server is answered here,
+  # against this database, as "this link has expired" (seen 2026-11-14).
+  # Posting and the admin pages still work with it off; connecting a channel
+  # and a first Mini App sign-in need it on.
+  TELEGRAM_UPDATES_ENABLED: ${TELEGRAM_UPDATES_ENABLED:-true}
   # Only for pointing the API at a stand-in or a self-hosted Bot API server.
   TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
   # The learner site the bot puts behind the button under a post. Telegram
