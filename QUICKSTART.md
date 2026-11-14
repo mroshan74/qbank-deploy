@@ -181,27 +181,6 @@ docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/audit-
 docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/audit-paper-lifecycle.js --apply
 ```
 
-### Question bank backfill (once, when the decision 0042 build first goes out, and required)
-
-Every question needs a `bank` (`pyq` or `external`) before the admin app can list it: each Question Bank page now asks for one bank, and a row from before the field matches neither, so an unbackfilled database shows **empty** Questions, My Questions and Review pages. Run it right after the new api image is up, inside the api container so it uses that container's `MONGODB_URI`. The first form only reports; `--apply` writes. It is safe to re-run, and rows the new build creates are stamped on write. Details: `qbank-api/src/scripts/backfill-question-banks.ts`.
-
-```bash
-docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/backfill-question-banks.js
-docker compose -f compose.prod.yml -p qbank exec -T api node dist/scripts/backfill-question-banks.js --apply
-```
-
-### Question source type migration (once, before the decision 0045 build serves traffic, and required)
-
-The decision 0045 build accepts only three source types (`exam_paper`, `current_affairs`, `custom`). A question still carrying a retired one (`textbook`, `manual`, `editorial`, `user`) fails validation on its next save, and a learner export containing it fails. The script rewrites those to `custom`, deleted rows included.
-
-Run it **from the new image before restarting the api**: pull, run it in a one-off container (the running api keeps serving, and it already accepts `custom`), then restart as in §5. The first form only reports; `--apply` writes. It is safe to re-run. Details: `qbank-api/src/scripts/migrate-question-source-types.ts`.
-
-```bash
-docker compose -f compose.prod.yml -p qbank pull api
-docker compose -f compose.prod.yml -p qbank run --rm --no-deps api node dist/scripts/migrate-question-source-types.js
-docker compose -f compose.prod.yml -p qbank run --rm --no-deps api node dist/scripts/migrate-question-source-types.js --apply
-```
-
 ### The decision 0046 build (7th level)
 
 The decision 0046 build adds `7th_level` and re-levels thirteen Last Grade Servants papers in the seed file, so re-run the seed step from §3 (it is idempotent) after the api is up. Then deploy the learner app and the admin app, in that order: both pin `examLevels` in their drift checks. There is no index or label migration: the database is seeded fresh, and the API ships the taxonomy it seeds.
