@@ -1023,6 +1023,27 @@ warning in the build log. With the Sentry secret set, the app's source is
 uploaded to Sentry. Detail: each app's `docs/arch/13-error-reporting.md`,
 "Readable stack traces".
 
+**The api's own errors (optional, a fourth step).** The api can put its own
+500s and a crash into the same collector, beside the apps' errors, with the
+stack the Telegram message does not carry. It needs an address in `.env` and
+the collector's flag on, the same flag as the apps, so switching the flag off
+silences the api too with no restart:
+
+```bash
+cd /opt/qbank
+echo 'OPS_ERROR_DSN_SELF=<the qbank-api line from monitoring.sh projects>' >> .env
+# and, or: OPS_ERROR_DSN_CLOUD=<the DSN of a Sentry project for the api>
+docker compose -f compose.prod.yml -p qbank up -d api
+```
+
+`GET /api/health/load` as a superadmin, field `ops.collectors`, says for each
+whether an address is set, whether its flag is on, and how many events were
+sent, failed and dropped. An event holds the error, its stack and the route's
+pattern, never the request or who made it. A collector that is away costs
+the api a failed send in the background, twenty a minute at most, and no
+request waits for it. Like the other ops keys these two are commented out in
+`.env.example`. Detail: `qbank-api/doc/11-monitoring-and-alerts.md`.
+
 On the local stack no collector address is given, so a local build reports to
 none. To rehearse one, pass `ERROR_REPORTING_DSN_SELF` or `_CLOUD` when
 building (`compose.local.yml` passes them through); a page on `localhost`
