@@ -159,6 +159,10 @@ services:
       context: ../qbank-admin
       args:
         BUILD_VERSION: ${BUILD_VERSION:-local}
+        # Only for rehearsing an error collector on this machine. Empty by
+        # default, so a build made here reports to no collector.
+        ERROR_REPORTING_DSN_SELF: ${ERROR_REPORTING_DSN_SELF:-}
+        ERROR_REPORTING_DSN_CLOUD: ${ERROR_REPORTING_DSN_CLOUD:-}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:80"
@@ -177,6 +181,10 @@ services:
       context: ../qbank-learner
       args:
         BUILD_VERSION: ${BUILD_VERSION:-local}
+        # Only for rehearsing an error collector on this machine. Empty by
+        # default, so a build made here reports to no collector.
+        ERROR_REPORTING_DSN_SELF: ${ERROR_REPORTING_DSN_SELF:-}
+        ERROR_REPORTING_DSN_CLOUD: ${ERROR_REPORTING_DSN_CLOUD:-}
     restart: unless-stopped
     ports:
       - "${LEARNER_PORT:-8081}:80"
@@ -197,6 +205,10 @@ services:
       context: ../qbank-writer
       args:
         BUILD_VERSION: ${BUILD_VERSION:-local}
+        # Only for rehearsing an error collector on this machine. Empty by
+        # default, so a build made here reports to no collector.
+        ERROR_REPORTING_DSN_SELF: ${ERROR_REPORTING_DSN_SELF:-}
+        ERROR_REPORTING_DSN_CLOUD: ${ERROR_REPORTING_DSN_CLOUD:-}
     restart: unless-stopped
     ports:
       - "${WRITER_PORT:-8082}:80"

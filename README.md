@@ -924,6 +924,7 @@ away.
 | Uptime checks from outside (the four hosts, `/api/readyz` through each app) and Atlas alerts | a free hosted service; the list is in `qbank-monitoring/README.md` | the checks are set up (UptimeRobot, email alerts); the Atlas alerts are not |
 | The API's own watchdog, messaging the owner's Telegram | inside the api image; switched by optional `OPS_*` keys in this repo's `.env` | built (roadmap Phase 2), **not yet switched on on the server**: see below |
 | Errors the three apps catch, reported to the api and told by the watchdog | each app image and the api image; switched by the `error-reporting-api` feature flag (ships on) | built (Phase 3). They reach your Telegram once the watchdog is switched on; without it they are only counted |
+| The same errors in a collector with a dashboard (Sentry, or our own) | each app image; two more feature flags (ship off) and an address in each build | built (Phase 5), **not switched on**: see "Switch an error collector on" |
 | Server stats on this box | `qbank-monitoring`, profile `agent`, cloned to `/opt/qbank-monitoring`. Listens on `127.0.0.1` only, read through an SSH tunnel, 64 MiB limit | built (Phase 4), **not yet installed here**: `qbank-monitoring/QUICKSTART.md`, section A |
 | The log shipper on this box | the same profile | not built (Phase 7) |
 | Dashboards on the owner's PC | `qbank-monitoring`, profile `local` | built (Phase 4) |
@@ -973,6 +974,44 @@ run without it, and monitoring must never be able to block a deploy.
 To read what it has counted without waiting for a message: `GET
 /api/health/load` as a superadmin, field `ops`. Do not point an uptime checker
 at that route: each read resets the load test's event-loop window.
+
+### Switch an error collector on
+
+The three apps already report the errors they catch to the api, which tells you
+on Telegram (the `error-reporting-api` flag, on by default). A **collector**
+adds a dashboard: errors grouped, counted and kept, with their stack. There are
+two, each with its own flag, and they can both be on:
+
+| Flag (Manage > Feature flags) | Collector | Needs |
+|---|---|---|
+| App errors to Sentry | Sentry's free plan (5,000 errors a month, 30 days) | a Sentry project, and its address in each app's build |
+| App errors to our own collector | Bugsink on the monitoring server | that server (`qbank-monitoring`, not built yet), and its address in each app's build |
+
+The address is baked into an app when it is built; the flag only picks it. So
+there are two steps, once:
+
+1. **Give the builds the address.** In each of `qbank-admin`, `qbank-learner`
+   and `qbank-writer` on GitHub: Settings, Secrets and variables, Actions, the
+   **Variables** tab, add `ERROR_REPORTING_DSN_CLOUD` (Sentry's DSN, from the
+   project's Client Keys page) or `ERROR_REPORTING_DSN_SELF`. A variable, not a
+   secret: it ends up in the public bundle, and it only lets a browser send a
+   report. Then redeploy each app once (push, or re-run its last workflow).
+2. **Switch the flag on** in the admin app. Every open tab follows within a
+   minute. Switch it off the same way; nothing is rebuilt.
+
+In Sentry, also switch on **Prevent Storing of IP Addresses** (the project's
+Security & Privacy settings). The apps send nothing personal, but every
+request arrives from an address.
+
+**None of this can block a deploy.** A variable that is unset means that
+collector is simply not used. A collector that is unreachable costs a failed
+request on a learner's phone and nothing else. Before removing the monitoring
+server, switch its flag off.
+
+On the local stack no collector address is given, so a local build reports to
+none. To rehearse one, pass `ERROR_REPORTING_DSN_SELF` or `_CLOUD` when
+building (`compose.local.yml` passes them through); a page on `localhost`
+only ever reports to a collector that is on this machine too.
 
 ### Until then
 
