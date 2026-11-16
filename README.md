@@ -948,7 +948,7 @@ it still counts and says nothing. Detail: `qbank-api/doc/11-monitoring-and-alert
 It needs an api image that has it (built 2026-11-16 or later) and the **ops
 bot**, a second bot that only sends. Never the product bot's token: an alert
 has to arrive on the day the product bot is in trouble. Creating the bot and
-finding your chat id: `qbank-monitoring/README.md`, "The ops bot".
+finding your chat id: `qbank-monitoring/README.md`, "The ops bot". Every monitoring step in order, and every setting with where its value comes from: `qbank-monitoring/SETUP.md` and `qbank-monitoring/ENVIRONMENT.md`.
 
 ```bash
 cd /opt/qbank
