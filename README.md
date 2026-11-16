@@ -926,10 +926,10 @@ away.
 | Errors the three apps catch, reported to the api and told by the watchdog | each app image and the api image; switched by the `error-reporting-api` feature flag (ships on) | built (Phase 3). They reach your Telegram once the watchdog is switched on; without it they are only counted |
 | The same errors in a collector with a dashboard (Sentry, or our own) | each app image; two more feature flags (ship off) and an address in each build | built (Phase 5), **not switched on**: see "Switch an error collector on" |
 | Server stats on this box | `qbank-monitoring`, profile `agent`, cloned to `/opt/qbank-monitoring`. Listens on `127.0.0.1` only, read through an SSH tunnel, 64 MiB limit | built (Phase 4), **not yet installed here**: `qbank-monitoring/QUICKSTART.md`, section A |
-| The log shipper on this box | the same profile | not built (Phase 7) |
+| The log shipper on this box | `qbank-monitoring`, profile `logs` beside `agent`. Reads the containers' logs back out of Docker, masks them and sends them to the monitoring VPS; drops lines when that is away. 96 MiB limit, about 70 in use. **No container's log driver changes**, and `docker logs` reads as before | built (Phase 7) and rehearsed locally, **not yet installed here**: `qbank-monitoring/QUICKSTART.md`, section A |
 | Dashboards on the owner's PC | `qbank-monitoring`, profile `local` | built (Phase 4) |
 | Dashboards and the error collector on their own VPS | `qbank-monitoring`, profile `hub` | built (Phase 6) and rehearsed locally, **not yet started on the VPS**: `qbank-monitoring/QUICKSTART.md`, section C |
-| The log store on that VPS | the same profile | not built (Phase 7) |
+| The log store on that VPS | the same profile: 14 days, searchable, behind a password | built (Phase 7) and rehearsed locally, **not yet started on the VPS** |
 
 What this repo will carry, and nothing more: the API's `OPS_*` keys, listed
 **commented out** in `.env.example` (an uncommented key there is required on
