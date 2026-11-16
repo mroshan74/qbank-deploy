@@ -928,7 +928,8 @@ away.
 | Server stats on this box | `qbank-monitoring`, profile `agent`, cloned to `/opt/qbank-monitoring`. Listens on `127.0.0.1` only, read through an SSH tunnel, 64 MiB limit | built (Phase 4), **not yet installed here**: `qbank-monitoring/QUICKSTART.md`, section A |
 | The log shipper on this box | the same profile | not built (Phase 7) |
 | Dashboards on the owner's PC | `qbank-monitoring`, profile `local` | built (Phase 4) |
-| Dashboards, the error collector and the log store on their own VPS | `qbank-monitoring`, profile `hub` | not built (Phases 6 and 7) |
+| Dashboards and the error collector on their own VPS | `qbank-monitoring`, profile `hub` | built (Phase 6) and rehearsed locally, **not yet started on the VPS**: `qbank-monitoring/QUICKSTART.md`, section C |
+| The log store on that VPS | the same profile | not built (Phase 7) |
 
 What this repo will carry, and nothing more: the API's `OPS_*` keys, listed
 **commented out** in `.env.example` (an uncommented key there is required on
