@@ -137,6 +137,16 @@ docker compose -f compose.prod.yml -p qbank exec -T homepage wget -q -O- http://
 Expect: `{"status":"ok","database":"connected","buildId":"..."}` from each app tier, `ok` from the homepage.
 
 ```bash
+# the feature flags reach the apps (public endpoint, no token); the same ETag on all three
+for h in ADMIN_HOST LEARNER_HOST WRITER_HOST; do
+  curl -s -D - -o /dev/null -X POST "https://$(sed -n "s/^$h=//p" .env)/api/ofrep/v1/evaluate/flags" \
+    -H 'Content-Type: application/json' -d '{"context":{}}' | grep -i '^etag'
+done
+```
+
+Expect: three identical `ETag:` lines. A different one on a host means its `/api` reaches a different API. The switches themselves are in the admin at Manage > Feature flags; see `README.md`, "Switch a feature on or off".
+
+```bash
 # the PDF faces, including the one with spaces in its name
 for svc in web learner; do
   docker compose -f compose.prod.yml -p qbank exec -T $svc \

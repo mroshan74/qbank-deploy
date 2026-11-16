@@ -637,6 +637,48 @@ nano .env                                  # edit the value
 
 Rotating `JWT_SECRET` signs everyone out, which is the intended effect.
 
+## Switch a feature on or off
+
+Feature flags are platform-wide on/off switches inside the API
+(`qbank-api/doc/decisions/0074-feature-flags.md`, reference
+`qbank-api/doc/10-feature-flags.md`). They need nothing from this repo: no
+compose change, no `.env` key, no redeploy. The flags live in the API's
+database, and every app reads them over its own `/api` proxy.
+
+- **Where.** The admin app, signed in as the superadmin: **Manage > Feature
+  flags**. One row per flag with its description, which apps read it and what
+  it ships as; a switch; and Reset, back to the shipped default.
+- **How long it takes.** Every open tab of every app asks again once a minute
+  and when it comes back to the front, so a flip reaches everyone within about
+  a minute, with no reload. The API itself follows at once; its own copy is
+  re-read every 30 seconds and straight after a write from the page.
+- **What a flag does, and does not do.** It hides a feature's entry points and
+  makes its routes answer `404` with "This feature is not switched on." It
+  never decides who may read data; roles and permissions do that, and the list
+  of flags is public.
+- **During an outage.** An app that cannot reach the API uses each flag's
+  shipped default, so a live feature stays visible and an unreleased one stays
+  hidden.
+- **After a database rebuild.** The overrides are one row in `app_settings`
+  (key `feature-flags`), so a bootstrap of a fresh database puts every flag
+  back to its shipped default. Set them again from the page.
+
+Quick check from the server or any machine (the endpoint is public, so no
+token):
+
+```bash
+curl -s -D - -X POST "https://<ADMIN_HOST>/api/ofrep/v1/evaluate/flags" \
+  -H 'Content-Type: application/json' -d '{"context":{}}'
+```
+
+Expect `200`, `Cache-Control: no-store`, an `ETag`, and a body of every flag:
+`{"flags":[{"key":"...","value":false,"reason":"STATIC","variant":"off"}, ...]}`.
+The same request through `<LEARNER_HOST>` and `<WRITER_HOST>` answers the same
+body and the same `ETag`, because all three proxy to the one API; a different
+`ETag` on one host means that host's `/api` is reaching a different API, which
+is a deploy fault. A flag still reading as its shipped value a minute after a
+flip means the page's write did not land: check `docker logs qbank-api`.
+
 ## Switch Telegram on
 
 Telegram is a module of the API (`qbank-api/doc/decisions/0063-telegram-integration.md`):
@@ -1079,7 +1121,10 @@ footer. `GET /api/readyz` also returns the API's `buildId`.
 
 - **Run exactly one `api` container.** The AI-tagging queue worker holds an
   in-process lock; a second replica would double-process the queue. Scaling
-  needs a distributed lock (a Mongo lease document) first.
+  needs a distributed lock (a Mongo lease document) first. The feature flags
+  assume one container too: a flip from the admin page is applied at once
+  only in the process that took the write, and another replica would follow
+  at its next 30-second refresh.
 - **No monitoring yet.** Container logs are rotated (10 MB × 3), and all five
   services report real health to Docker — so `docker ps` is a truthful
   local signal, but nothing is watching it and nothing acts on it. Compose does
