@@ -924,8 +924,10 @@ away.
 | Uptime checks from outside (the four hosts, `/api/readyz` through each app) and Atlas alerts | a free hosted service; the list is in `qbank-monitoring/README.md` | the checks are set up (UptimeRobot, email alerts); the Atlas alerts are not |
 | The API's own watchdog, messaging the owner's Telegram | inside the api image; switched by optional `OPS_*` keys in this repo's `.env` | built (roadmap Phase 2), **not yet switched on on the server**: see below |
 | Errors the three apps catch, reported to the api and told by the watchdog | each app image and the api image; switched by the `error-reporting-api` feature flag (ships on) | built (Phase 3). They reach your Telegram once the watchdog is switched on; without it they are only counted |
-| Server stats and the log shipper on this box | `qbank-monitoring`, profile `agent`, cloned to `/opt/qbank-monitoring` | not built (Phases 4 and 7) |
-| Dashboards, the error collector, the log store | `qbank-monitoring`, on its own VPS or the owner's PC | not built (Phases 4, 6 and 7) |
+| Server stats on this box | `qbank-monitoring`, profile `agent`, cloned to `/opt/qbank-monitoring`. Listens on `127.0.0.1` only, read through an SSH tunnel, 64 MiB limit | built (Phase 4), **not yet installed here**: `qbank-monitoring/QUICKSTART.md`, section A |
+| The log shipper on this box | the same profile | not built (Phase 7) |
+| Dashboards on the owner's PC | `qbank-monitoring`, profile `local` | built (Phase 4) |
+| Dashboards, the error collector and the log store on their own VPS | `qbank-monitoring`, profile `hub` | not built (Phases 6 and 7) |
 
 What this repo will carry, and nothing more: the API's `OPS_*` keys, listed
 **commented out** in `.env.example` (an uncommented key there is required on
