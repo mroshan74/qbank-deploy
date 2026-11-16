@@ -986,7 +986,7 @@ two, each with its own flag, and they can both be on:
 | Flag (Manage > Feature flags) | Collector | Needs |
 |---|---|---|
 | App errors to Sentry | Sentry's free plan (5,000 errors a month, 30 days) | a Sentry project, and its address in each app's build |
-| App errors to our own collector | Bugsink on the monitoring server | that server (`qbank-monitoring`, not built yet), and its address in each app's build |
+| App errors to our own collector | Bugsink on the monitoring server | that server (`qbank-monitoring`, section C of its quickstart), and its address in each app's build |
 
 The address is baked into an app when it is built; the flag only picks it. So
 there are two steps, once:
@@ -1008,6 +1008,20 @@ request arrives from an address.
 collector is simply not used. A collector that is unreachable costs a failed
 request on a learner's phone and nothing else. Before removing the monitoring
 server, switch its flag off.
+
+**Readable stack traces (optional, a third step).** A collector shows an
+error's stack as positions in the minified bundle unless it has that build's
+source maps. To give them: in each of the three app repos on GitHub, the
+**Secrets** tab this time, add `SOURCEMAPS_UPLOAD_SELF` (the line
+`bash scripts/monitoring.sh sourcemaps` prints for that app on the
+monitoring server) or `SOURCEMAPS_UPLOAD_CLOUD`
+(`https://<token>@sentry.io/<organization>/<project>`, with an organization
+token from Sentry's settings). From the next deploy the image build writes
+the maps, uploads them and deletes them: **no map is ever in an image**. A
+secret that is unset changes nothing, and an upload that fails only prints a
+warning in the build log. With the Sentry secret set, the app's source is
+uploaded to Sentry. Detail: each app's `docs/arch/13-error-reporting.md`,
+"Readable stack traces".
 
 On the local stack no collector address is given, so a local build reports to
 none. To rehearse one, pass `ERROR_REPORTING_DSN_SELF` or `_CLOUD` when
