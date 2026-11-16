@@ -448,6 +448,38 @@ Telegram.
 
 Off again: remove the line from `.env`, then the same `up -d api`.
 
+## Switch the watchdog on (optional)
+
+Off by default. The api then messages you on Telegram about its own errors and
+the box's memory, disk and database. Needs the **ops bot's** token and your
+chat id (`qbank-monitoring/README.md`, "The ops bot"); never the product bot's
+token. Detail: `README.md`, "Switch the watchdog on".
+
+```bash
+cd /opt/qbank
+cat >> .env <<'EOF'
+OPS_TELEGRAM_BOT_TOKEN=<the ops bot's token>
+OPS_ALERT_CHAT_ID=<your chat id>
+OPS_ENV_LABEL=prod
+EOF
+docker compose -f compose.prod.yml -p qbank up -d api
+docker logs qbank-api 2>&1 | grep -i "ops watchdog" | tail -1
+# → Ops watchdog started (every 60000ms, alerts on).
+# and a Telegram message: [prod] QFoundry API / Started, build ...
+```
+
+Off again: remove the three lines from `.env`, then the same `up -d api`.
+
+## Monitoring (not in this repo)
+
+Nothing else here to paste. The rest of monitoring is the sibling repo
+`qbank-monitoring`, with its own `QUICKSTART.md`, and bringing this server up
+never depends on it. Detail: `README.md`, "Monitoring and alerts".
+
+After a first deploy on a new server, point the hosted uptime checks at it (the
+list is in `qbank-monitoring/README.md`, "Always-on outside checks"); they use
+hostnames, so a server that kept its DNS names needs no change.
+
 ## When it goes wrong
 
 | Symptom | Cause |

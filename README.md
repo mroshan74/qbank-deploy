@@ -902,6 +902,83 @@ docker compose -f compose.prod.yml -p qbank run --rm \
 
 ---
 
+## Monitoring and alerts
+
+**Nothing in this repo monitors anything, on purpose.** `deploy.sh` pulls this
+repo on every app deploy, so anything kept here is on the deploy path, and
+monitoring must never be on it. The stack lives in the sibling repo
+**`qbank-monitoring`** (its own `README.md`, `QUICKSTART.md` and
+`INSTRUCTION.md`); the plan is
+`qbank-api/doc/roadmaps/monitoring-and-error-telemetry.md`, decision 0075.
+
+**The one rule: the app side never waits for the monitoring side.** No script
+here calls it, no service here `depends_on` it, and no key in `.env.example` is
+required for it. If the monitoring VPS is deleted, a deploy from this repo
+behaves exactly as it does today. Keep it that way: do not add a monitoring
+service to `compose.prod.yml`, and do not change a container's `logging:`
+driver to one that ships logs, which can hang a container when its target is
+away.
+
+| Layer | Where it lives | State (2026-11-16) |
+|---|---|---|
+| Uptime checks from outside (the four hosts, `/api/readyz` through each app) and Atlas alerts | a free hosted service; the list is in `qbank-monitoring/README.md` | the checks are set up (UptimeRobot, email alerts); the Atlas alerts are not |
+| The API's own watchdog, messaging the owner's Telegram | inside the api image; switched by optional `OPS_*` keys in this repo's `.env` | built (roadmap Phase 2), **not yet switched on on the server**: see below |
+| Server stats and the log shipper on this box | `qbank-monitoring`, profile `agent`, cloned to `/opt/qbank-monitoring` | not built (Phases 4 and 7) |
+| Dashboards, the error collector, the log store | `qbank-monitoring`, on its own VPS or the owner's PC | not built (Phases 4, 6 and 7) |
+
+What this repo will carry, and nothing more: the API's `OPS_*` keys, listed
+**commented out** in `.env.example` (an uncommented key there is required on
+every server and blocks a deploy without it), and their passthroughs in
+`compose.local.yml`.
+
+### Switch the watchdog on
+
+The api counts its own 500s, rate-limit refusals, Telegram refusals and refused
+file hand-offs, and looks at its memory, the box's memory and disk and the
+database once a minute. With the two keys below it tells you on Telegram: a
+note on every start, a problem when it begins and when it clears, an error with
+its route and a count, and a digest once a day (09:00 in India). Without them
+it still counts and says nothing. Detail: `qbank-api/doc/11-monitoring-and-alerts.md`.
+
+It needs an api image that has it (built 2026-11-16 or later) and the **ops
+bot**, a second bot that only sends. Never the product bot's token: an alert
+has to arrive on the day the product bot is in trouble. Creating the bot and
+finding your chat id: `qbank-monitoring/README.md`, "The ops bot".
+
+```bash
+cd /opt/qbank
+cat >> .env <<'EOF'
+OPS_TELEGRAM_BOT_TOKEN=<the ops bot's token>
+OPS_ALERT_CHAT_ID=<your chat id>
+OPS_ENV_LABEL=prod
+EOF
+docker compose -f compose.prod.yml -p qbank up -d api
+docker logs qbank-api 2>&1 | grep -i "ops watchdog" | tail -1
+# → Ops watchdog started (every 60000ms, alerts on).
+```
+
+A Telegram message `[prod] QFoundry API` / `Started, build ...` arrives within
+seconds of the container starting. If the log line says `alerts off: the ops
+bot is not set`, one of the two keys is missing or misspelt.
+
+Off again: remove the three lines from `.env`, then the same `up -d api`.
+
+These keys are listed **commented out** in `.env.example` on purpose. An
+uncommented key there is required on every server and `deploy.sh` refuses to
+run without it, and monitoring must never be able to block a deploy.
+
+To read what it has counted without waiting for a message: `GET
+/api/health/load` as a superadmin, field `ops`. Do not point an uptime checker
+at that route: each read resets the load test's event-loop window.
+
+### Until then
+
+The signals on this box are `docker compose -f compose.prod.yml -p qbank ps`
+([Container health](#container-health)), the red GitHub Actions run when a
+deploy's smoke test fails, and the hosted uptime checks.
+
+---
+
 ## Troubleshooting
 
 **`Error error from registry: unauthorized` while pulling the image.** The
@@ -1125,13 +1202,14 @@ footer. `GET /api/readyz` also returns the API's `buildId`.
   assume one container too: a flip from the admin page is applied at once
   only in the process that took the write, and another replica would follow
   at its next 30-second refresh.
-- **No monitoring yet.** Container logs are rotated (10 MB × 3), and all five
-  services report real health to Docker — so `docker ps` is a truthful
-  local signal, but nothing is watching it and nothing acts on it. Compose does
-  not restart an unhealthy container. A log shipper and an external uptime check
-  are still additive work. Whenever that happens, the acceptance test is *"a log
-  line from the app appears in the dashboard"* — the predecessor project's Loki
-  pipeline was installed but silently dropping everything for a year.
+- **Monitoring lives in its own repo, and is still being built.** See
+  [Monitoring and alerts](#monitoring-and-alerts). On this server, container
+  logs are rotated (10 MB × 3) and all five services report real health to
+  Docker, so `docker ps` is a truthful local signal, but Compose does not
+  restart an unhealthy container and nothing on this box acts on it. When the
+  log shipper arrives, its acceptance test is *"a log line from the app appears
+  in the dashboard"*: the predecessor project's Loki pipeline was installed but
+  silently dropping everything for a year.
 - **Back up the `letsencrypt` volume.** It holds `acme.json`. Losing it means
   re-issuing certificates and risking Let's Encrypt rate limits.
 - **MongoDB is Atlas**, so database backups are Atlas's job, not this repo's.

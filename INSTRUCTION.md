@@ -65,6 +65,33 @@ is missing: `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`. Also make sure
 the provider's own firewall (cloud console security group) allows the same
 three, or the box is open and still unreachable.
 
+**Add a swap file if the box has none.** The app runs on 2 GB. Without swap, a
+burst that needs more than is free ends with the kernel killing a container;
+with it, the box slows down instead and the API's watchdog has time to say so.
+
+> Added 2026-11-16 (monitoring roadmap, Phase 1). **The current server already
+> has one** (5.3 GB, checked by the owner the same day), so these standard
+> Ubuntu steps have not been run from this file; they are here for the next box.
+
+```bash
+swapon --show                  # prints nothing = no swap
+free -m
+```
+
+If there is none:
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+# prefer memory; reach for swap only under pressure
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
+sudo sysctl --system
+swapon --show                  # expect /swapfile, 2G
+```
+
 ---
 
 ## 2. SSH keys

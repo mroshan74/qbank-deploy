@@ -97,6 +97,17 @@ x-api-env: &api-env
   # where this container reaches the same server.
   TELEGRAM_LOGIN_ISSUER: ${TELEGRAM_LOGIN_ISSUER:-https://oauth.telegram.org}
   TELEGRAM_LOGIN_INTERNAL_URL: ${TELEGRAM_LOGIN_INTERNAL_URL:-}
+  # The API's watchdog (qbank-api decision 0075). Empty by default: it still
+  # counts, for GET /api/health/load, and messages nobody. NEVER put the real
+  # ops bot's token and chat id in the .env beside this file: this stack would
+  # then alert the owner as if it were production. To see it send, point it at
+  # a stand-in (`pnpm run probe:ops-watchdog` in qbank-api) with a made-up
+  # token, and give it a short interval so a check takes seconds, not minutes.
+  OPS_TELEGRAM_BOT_TOKEN: ${OPS_TELEGRAM_BOT_TOKEN:-}
+  OPS_ALERT_CHAT_ID: ${OPS_ALERT_CHAT_ID:-}
+  OPS_TELEGRAM_API_BASE_URL: ${OPS_TELEGRAM_API_BASE_URL:-}
+  OPS_ENV_LABEL: ${OPS_ENV_LABEL:-local}
+  OPS_WATCHDOG_INTERVAL_MS: ${OPS_WATCHDOG_INTERVAL_MS:-60000}
   SEEDER_DATA_DIR: data
   SEED_SUPERADMIN_USERNAME: ${SEED_SUPERADMIN_USERNAME:-superadmin}
   SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMe123!}
