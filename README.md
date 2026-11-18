@@ -165,6 +165,10 @@ Override the seeded account with `SEED_SUPERADMIN_USERNAME` /
 `../qbank-writer` and `../qbank-homepage`; both reach the server in Phase 4 of
 the workspace roadmap `docs/roadmaps/qfoundry-brand-and-hostnames.md`.
 
+**Premium emoji files** (qbank-api decision 0076) are on a named volume here
+too, `telegram_emoji_cache`, so the admin's preview does not fetch them again
+after every `--build`.
+
 **Telegram is off here by default.** The api container gets `TELEGRAM_BOT_TOKEN`
 empty, which leaves the API's Telegram module inert (`/api/telegram/*` answers
 503; `qbank-api/doc/decisions/0063-telegram-integration.md`). To try it, put the
@@ -741,6 +745,34 @@ Things that are true because of how it works:
 - **The PDF posted to a channel is built in the admin's browser** and passes
   through the API in memory. nginx's 2 MB request cap on the admin host is the
   ceiling; the API refuses a file over 1.9 MB with a sentence.
+
+### Premium emoji
+
+Templates can carry Telegram premium (custom) emoji
+(`qbank-api/doc/decisions/0076-telegram-premium-emoji-by-forward.md`). A staff
+member saves one by forwarding a styled post to the bot after `/template`, and
+a post written from it goes to their own Telegram to be forwarded to the
+channel. Two things on the server side:
+
+- **Keep Telegram Premium on the account that owns the production bot** (the
+  account that created it in BotFather). That subscription is what lets the
+  bot send premium emoji at all, into the staff member's own chat. If it
+  lapses, drafts arrive with ordinary emoji instead; the API notices from what
+  Telegram sends back, the post's history says so, and the watchdog messages
+  the owner ("the account that owns the product bot may have lost Telegram
+  Premium"). Nothing else breaks. No Fragment username is bought: a bot needs
+  one to send premium emoji into a channel itself, which is why the staff
+  member forwards instead.
+- **The preview's emoji files** are kept on the `qbank-telegram-emoji` volume,
+  mounted at `/app/data/telegram-emoji` in the api container, so a deploy does
+  not empty it. It holds at most 50 MB and the API removes the oldest files
+  past that. Deleting the volume is harmless: each emoji is fetched from
+  Telegram again the first time it is previewed. `TELEGRAM_EMOJI_CACHE_DIR`
+  (optional, `.env.example`) moves the folder; change it only with the mount.
+
+For the bot to put a forwarded post's View in App and View in Web buttons
+back, an organization gives the bot **Edit messages of others** in its
+channel; the admin's channel row asks for it. Nothing to set here.
 
 ### Open the app inside Telegram
 

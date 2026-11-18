@@ -149,6 +149,8 @@ services:
         condition: service_healthy
     volumes:
       - ai_tagging_jobs:/app/data/jobs/ai-tagging
+      # As on the server: premium emoji files survive a rebuild (0076).
+      - telegram_emoji_cache:/app/data/telegram-emoji
     # Same probes as compose.prod.yml — this stack only earns its keep if a
     # healthcheck that would fail on the server fails here first.
     healthcheck:
@@ -263,3 +265,4 @@ services:
 volumes:
   mongo_data:
   ai_tagging_jobs:
+  telegram_emoji_cache:

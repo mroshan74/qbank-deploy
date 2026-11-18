@@ -40,6 +40,10 @@ services:
       # OpenAI batch jobs run for minutes to 24h and their artefacts must
       # survive a restart for the result import to work.
       - ai_tagging_jobs:/app/data/jobs/ai-tagging
+      # Premium emoji files the API fetches from Telegram for the admin's
+      # preview (qbank-api decision 0076). On a volume so a deploy does not
+      # empty it; 50 MB at most, the API keeps it in bounds itself.
+      - telegram_emoji_cache:/app/data/telegram-emoji
     healthcheck:
       # readyz, not healthz: a process that is up but cannot reach Mongo is not
       # a deploy that worked. Alpine ships BusyBox wget, which exits non-zero on
@@ -234,6 +238,8 @@ services:
 volumes:
   ai_tagging_jobs:
     name: qbank-ai-tagging-jobs
+  telegram_emoji_cache:
+    name: qbank-telegram-emoji
 
 networks:
   # Created and owned by the Traefik stack (compose.traefik.yml), which must
